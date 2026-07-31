@@ -1,7 +1,11 @@
-#include "anvl.h"
+#define SHCMD(cmd) \
+{ .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
+
+#include "axe.h"
 
 #define CONTROL RIVER_SEAT_V1_MODIFIERS_CTRL
 #define SUPER   RIVER_SEAT_V1_MODIFIERS_MOD4
+#define ALT     RIVER_SEAT_V1_MODIFIERS_MOD1
 #define SHIFT   RIVER_SEAT_V1_MODIFIERS_SHIFT
 
 /* layout */
@@ -13,49 +17,211 @@ static const unsigned int borderpx = 2;
 static const uint8_t bordercolor_focus[4]  = { 0xd8, 0xde, 0xe9, 0xff };
 static const uint8_t bordercolor_normal[4] = { 0x4c, 0x56, 0x6a, 0xff };
 
-#define TAGKEY(KEY,TAG) \
-	{SUPER,               KEY, view,       { .u = 1 << TAG } }, \
-	{SUPER|CONTROL,       KEY, toggleview, { .u = 1 << TAG } }, \
-	{SUPER|SHIFT,         KEY, tag,        { .u = 1 << TAG } }, \
-	{SUPER|SHIFT|CONTROL, KEY, toggletag,  { .u = 1 << TAG } },
+/* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
+static const char *xkb_layout  = "us,np";
+static const char *xkb_options = "grp:sclk_toggle";
+/* static const char *xkb_options = "grp:sclk_toggle,caps:swapescape"; */
+static const bool numlock_default_on = true;
 
-static const char *termcmd[] = { "foot", NULL };
+/* keyboard repeat, applied to every keyboard device */
+static const int repeat_rate  = 35;
+static const int repeat_delay = 300;
+
+/* pointer acceleration applied to every pointer device (mice + touchpads) */
+static const int pointer_accel_profile = RIVER_LIBINPUT_DEVICE_V1_ACCEL_PROFILE_FLAT;
+static const double pointer_accel_speed = 0.0; /* [-1 .. 1], 0 = device default */
+
+/* touchpad-only settings (device is treated as a touchpad if it reports
+ * tap-to-click support at all - libinput doesn't otherwise label devices) */
+static const bool touchpad_natural_scroll  = false;
+static const bool touchpad_dwt             = true;  /* disable-while-typing */
+static const bool touchpad_tap             = true;
+static const bool touchpad_middle_emulation = false;
+static const int  touchpad_click_method    = RIVER_LIBINPUT_DEVICE_V1_CLICK_METHOD_CLICKFINGER;
+static const int  touchpad_scroll_method   = RIVER_LIBINPUT_DEVICE_V1_SCROLL_METHOD_TWO_FINGER;
+
+/* commands run once at startup */
+static const char *autostart[][8] = {
+    // { "waybar", NULL },
+    { "mpd", NULL },
+    { "foot", "-s", NULL },
+    { "waybg", NULL },
+    { "nightcolor", NULL },
+    { "transmission-daemon", NULL },
+    { "batteryAlert", NULL },
+    { "wl-paste", "--type", "text", "--watch", "cliphist", "store", NULL },
+    { "wl-paste", "--type", "image", "--watch", "cliphist", "store", NULL },
+    { NULL },
+};
+
+/* simple per-app_id window rules: floating, forced tag (-1 = unchanged),
+ * forced monitor index (-1 = unchanged) */
+static const Rule rules[] = {
+    /* app_id             floating  tag  monitor */
+    { "pavucontrol",      true,    -1,  -1 },
+    { "mpv",              true,    -1,  -1 },
+    { "galculator",       true,    -1,  -1 },
+    { "pcmanfm",          true,    -1,  -1 },
+    { "file_progress",    true,    -1,  -1 },
+    { "float",            true,    -1,  -1 },
+};
+
+#define TAGKEY(KEY,TAG) \
+    {SUPER,               KEY, view,       { .u = 1 << TAG } }, \
+    {SUPER|CONTROL,       KEY, toggleview, { .u = 1 << TAG } }, \
+    {SUPER|SHIFT,         KEY, tag,        { .u = 1 << TAG } }, \
+    {SUPER|SHIFT|CONTROL, KEY, toggletag,  { .u = 1 << TAG } },
+
+static const char *termcmd[] = { "footclient", NULL };
 static const char *launchercmd[] = { "fuzzel", NULL };
 
 Keys keybinds[] = {
-  {SUPER,         XKB_KEY_period, select_next_mon, {0} },
-  {SUPER,         XKB_KEY_comma,  select_prev_mon, {0} },
+    {SUPER,         XKB_KEY_period, select_next_mon, {0} },
+    {SUPER,         XKB_KEY_comma,  select_prev_mon, {0} },
 
-  /* move focus up/down the stack, without moving windows */
-  {SUPER,         XKB_KEY_j,      focus_next,      {0} },
-  {SUPER,         XKB_KEY_k,      focus_prev,      {0} },
+    /* move focus up/down the stack, without moving windows */
+    {SUPER,         XKB_KEY_j,      focus_next,      {0} },
+    {SUPER,         XKB_KEY_k,      focus_prev,      {0} },
 
-  /* move the focused window's position in the stack */
-  {SUPER|SHIFT,   XKB_KEY_j,      movestack,       { .i = +1 } },
-  {SUPER|SHIFT,   XKB_KEY_k,      movestack,       { .i = -1 } },
+    /* move the focused window's position in the stack */
+    {SUPER|SHIFT,   XKB_KEY_j,      movestack,       { .i = +1 } },
+    {SUPER|SHIFT,   XKB_KEY_k,      movestack,       { .i = -1 } },
 
-  /* master area size */
-  {SUPER,         XKB_KEY_i,      incnmaster,      { .i = +1 } },
-  {SUPER,         XKB_KEY_d,      incnmaster,      { .i = -1 } },
-  {SUPER,         XKB_KEY_h,      setmfact,        { .f = -0.05 } },
-  {SUPER,         XKB_KEY_l,      setmfact,        { .f = +0.05 } },
+    /* master area size */
+    {SUPER,         XKB_KEY_o,      incnmaster,      { .i = +1 } },
+    {SUPER|SUPER,   XKB_KEY_o,      incnmaster,      { .i = -1 } },
+    {SUPER,         XKB_KEY_h,      setmfact,        { .f = -0.05 } },
+    {SUPER,         XKB_KEY_l,      setmfact,        { .f = +0.05 } },
 
-  {SUPER,         XKB_KEY_Return, spawn,           { .v = termcmd } },
-  {SUPER,         XKB_KEY_p,      spawn,           { .v = launchercmd } },
-  {SUPER|SHIFT,   XKB_KEY_Return, zoom,            {0} },
-  {SUPER|SHIFT,   XKB_KEY_space,  togglefloating,  {0} },
-  {SUPER,         XKB_KEY_f,      togglefullscreen,{0} },
+    {SUPER|CONTROL, XKB_KEY_Return, zoom,            {0} },
+    {SUPER,         XKB_KEY_f,  togglefloating,  {0} },
+    {SUPER|SHIFT,   XKB_KEY_f,      togglefullscreen,{0} },
 
-  {SUPER|SHIFT,   XKB_KEY_c,      destroy_window,  {0} },
-  {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
+    {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
+    {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
 
-  TAGKEY(XKB_KEY_1, 0)
-  TAGKEY(XKB_KEY_2, 1)
-  TAGKEY(XKB_KEY_3, 2)
-  TAGKEY(XKB_KEY_4, 3)
-  TAGKEY(XKB_KEY_5, 4)
-  TAGKEY(XKB_KEY_6, 5)
-  TAGKEY(XKB_KEY_7, 6)
-  TAGKEY(XKB_KEY_8, 7)
-  TAGKEY(XKB_KEY_9, 8)
+    // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
+    // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },
+    // {SUPER,         XKB_KEY_w,      spawn,           SHCMD("$BROWSER")},
+    // {ALT|SHIFT,     XKB_KEY_space,  spawn,           SHCMD("mpc toggle")},
+    // {SUPER,         XKB_KEY_space,  spawn,           { .v = launchercmd } },
+
+    /* Clipboard & Notes */
+    { SUPER|SHIFT,          XKB_KEY_V,              spawn,          SHCMD("clip2Note") },
+    { SUPER,                XKB_KEY_z,              spawn,          SHCMD("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy") },
+    { SUPER,                XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -e sh -c \"tmux attach || tmux new -s nonSense\"") },
+    { SUPER,                XKB_KEY_space,          spawn,          { .v = launchercmd } },
+    { SUPER,                XKB_KEY_y,              spawn,          SHCMD("$term -e tSess") },
+    // { SUPER|SHIFT,       XKB_KEY_space,          spawn,          { .v = launchercmd } },
+    { SUPER|SHIFT,          XKB_KEY_Return,         spawn,          { .v = termcmd } },
+    // { ALT,               XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -e openInVim") },
+    { SUPER,                XKB_KEY_d,              spawn,          SHCMD("$TERMINAL -e vid-grab") },
+
+    /* Brightness */
+    { SUPER|ALT,            XKB_KEY_equal,          spawn,          SHCMD("brightnessctl -e set 3%+") },
+    { SUPER|ALT,            XKB_KEY_minus,          spawn,          SHCMD("brightnessctl -e set 3%-") },
+
+    /* Utilities */
+    // { SUPER|CONTROL,     XKB_KEY_v,              spawn,          SHCMD("pavucontrol") },
+    { SUPER,                XKB_KEY_c,              spawn,          SHCMD("galculator") },
+
+    /* Music Player */
+    { SUPER|ALT,            XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -a=ncmpcpp -e ncmpcpp") },
+
+    /* Screenshots */
+    { CONTROL|SHIFT,        XKB_KEY_s,              spawn,          SHCMD("scrshot cpy") },
+    { SUPER,                XKB_KEY_s,              spawn,          SHCMD("scrshot fullscr") },
+    { SUPER|SHIFT,          XKB_KEY_s,              spawn,          SHCMD("scrshot sel") },
+    { 0,                    XKB_KEY_Print,          spawn,          SHCMD("scrshot fullscr") },
+    { SHIFT,                XKB_KEY_Print,          spawn,          SHCMD("scrshot sel") },
+
+    /* Misc Tools */
+    { SUPER|SHIFT,          XKB_KEY_Y,              spawn,          SHCMD("emoji-picker") },
+
+    /* XF86 / Hardware Keys */
+    { 0,                    XKB_KEY_XF86MonBrightnessUp,   spawn,   SHCMD("brightnessctl -e set 2%+") },
+    { 0,                    XKB_KEY_XF86MonBrightnessDown, spawn,   SHCMD("brightnessctl -e set 2%-") },
+    { 0,                    XKB_KEY_XF86AudioLowerVolume,  spawn,   SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 3%-") },
+    { 0,                    XKB_KEY_XF86AudioRaiseVolume,  spawn,   SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 3%+") },
+    { 0,                    XKB_KEY_XF86AudioMute,         spawn,   SHCMD("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle") },
+    { 0,                    XKB_KEY_XF86AudioMicMute,      spawn,   SHCMD("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle") },
+    { 0,                    XKB_KEY_XF86AudioPrev,         spawn,   SHCMD("mpc prev") },
+    { 0,                    XKB_KEY_XF86AudioNext,         spawn,   SHCMD("mpc next") },
+    { 0,                    XKB_KEY_XF86AudioPlay,         spawn,   SHCMD("mpc toggle") },
+    { 0,                    XKB_KEY_XF86HomePage,          spawn,   SHCMD("librewolf") },
+    { 0,                    XKB_KEY_XF86Calculator,        spawn,   SHCMD("galculator") },
+    { 0,                    XKB_KEY_XF86Favorites,         spawn,   SHCMD("emoji-picker") },
+    { 0,                    XKB_KEY_XF86Phone,             spawn,   SHCMD("brightnessctl -e set 2%+") },
+    { 0,                    XKB_KEY_XF86HangupPhone,       spawn,   SHCMD("brightnessctl -e set 2%-") },
+    { 0,                    XKB_KEY_Help,                  spawn,   SHCMD("$BROWSER") },
+
+    /* Media with Alt (Mod1) */
+    { ALT,                  XKB_KEY_Up,             spawn,          SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 3%+") },
+    { ALT,                  XKB_KEY_Down,           spawn,          SHCMD("wpctl set-volume @DEFAULT_AUDIO_SINK@ 3%-") },
+    { ALT|SHIFT,            XKB_KEY_space,          spawn,          SHCMD("mpc toggle") },
+    { ALT|SHIFT,            XKB_KEY_Right,          spawn,          SHCMD("mpc next") },
+    { ALT|SHIFT,            XKB_KEY_Left,           spawn,          SHCMD("mpc prev") },
+    { ALT,                  XKB_KEY_bracketleft,    spawn,          SHCMD("mpc seek -10") },
+    { ALT,                  XKB_KEY_bracketright,   spawn,          SHCMD("mpc seek +10") },
+    { ALT|SHIFT,            XKB_KEY_bracketleft,    spawn,          SHCMD("mpc seek -60") },
+    { ALT|SHIFT,            XKB_KEY_bracketright,   spawn,          SHCMD("mpc seek +60") },
+    // { ALT,               XKB_KEY_equal,          spawn,          SHCMD("mpc vol +5") },
+    // { ALT,               XKB_KEY_minus,          spawn,          SHCMD("mpc vol -5") },
+    { ALT|CONTROL,          XKB_KEY_space,          spawn,          SHCMD("mpc single") },
+    { ALT,                  XKB_KEY_apostrophe,     spawn,          SHCMD("mpc seek 0%") },
+
+    /* Wallpaper & Power */
+    { SUPER|SHIFT,          XKB_KEY_W,              spawn,          SHCMD("set-wallpaper") },
+    { ALT|CONTROL,          XKB_KEY_w,              spawn,          SHCMD("randomize-wall") },
+    // { SUPER,             XKB_KEY_grave,          spawn,          SHCMD("alacritty") },
+
+    { SUPER,                XKB_KEY_BackSpace,      spawn,          SHCMD("power") },
+    { SUPER|SHIFT,          XKB_KEY_D,              spawn,          SHCMD("pcmanfm") },
+    { SUPER|SHIFT,          XKB_KEY_E,              spawn,          SHCMD("$TERMINAL -e htop") },
+    { SUPER,                XKB_KEY_w,              spawn,          SHCMD("$BROWSER") },
+
+    { SUPER,                XKB_KEY_v,              spawn,          SHCMD("$TERMINAL -e transg-tui") },
+    // { SUPER,             XKB_KEY_x,              spawn,          SHCMD("$TERMINAL -e ytfzf") },
+    // { SUPER|SHIFT,       XKB_KEY_N,              spawn,          SHCMD("$TERMINAL -e tmux new") },
+    { SUPER,                XKB_KEY_slash,          spawn,          SHCMD("mount-drives") },
+    { SUPER|CONTROL,        XKB_KEY_slash,          spawn,          SHCMD("mount-and") },
+    { SUPER|SHIFT,          XKB_KEY_slash,          spawn,          SHCMD("umount-drives") },
+    { SUPER|CONTROL,        XKB_KEY_r,              spawn,          SHCMD("webcam-show") },
+    { SUPER,                XKB_KEY_e,              spawn,          SHCMD("qr-gen") },
+    { SUPER|SHIFT,          XKB_KEY_R,              spawn,          SHCMD("qr-Reader") },
+    { SUPER,                XKB_KEY_m,              spawn,          SHCMD("movie-watch") },
+    { SUPER|SHIFT,          XKB_KEY_B,              spawn,          SHCMD("read-book") },
+
+    /* Gammastep / Nightcolor */
+    { SUPER,                XKB_KEY_u,              spawn,          SHCMD("nightcolor 1") },
+    { SUPER|SHIFT,          XKB_KEY_U,              spawn,          SHCMD("nightcolor") },
+
+    /* Network / Media / Bar Controls */
+    // { ALT,               XKB_KEY_w,              spawn,          SHCMD("$TERMINAL -e nmtui") },
+    { SUPER|SHIFT,          XKB_KEY_M,              spawn,          SHCMD("mpv-play") },
+    // { SUPER,             XKB_KEY_b,              spawn,          SHCMD("killall -SIGUSR1 waybar") },
+    // { SUPER,             XKB_KEY_b,              spawn,          SHCMD("bar mode toggle") },
+    { SUPER,                XKB_KEY_a,              spawn,          SHCMD("$TERMINAL -e lf") },
+    // { SUPER|SHIFT,       XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -e openInVim") },
+    { SUPER,                XKB_KEY_p,              spawn,          SHCMD("tmux new-window -n \"Nvim\" \"fzf-proj\"") },
+    { SUPER,                XKB_KEY_n,              spawn,          SHCMD("$TERMINAL -e take-notes") },
+    { SUPER,                XKB_KEY_i,              spawn,          SHCMD("drawing") },
+    { CONTROL|SHIFT,        XKB_KEY_X,              spawn,          SHCMD("killTask") },
+
+    { SUPER,                XKB_KEY_semicolon,      spawn,          SHCMD("spellchk") },
+
+    TAGKEY(XKB_KEY_1, 0)
+    TAGKEY(XKB_KEY_2, 1)
+    TAGKEY(XKB_KEY_3, 2)
+    TAGKEY(XKB_KEY_4, 3)
+    TAGKEY(XKB_KEY_5, 4)
+    TAGKEY(XKB_KEY_6, 5)
+    TAGKEY(XKB_KEY_7, 6)
+    TAGKEY(XKB_KEY_8, 7)
+    TAGKEY(XKB_KEY_9, 8)
+};
+
+Mousebinds mousebinds[] = {
+    {SUPER, BTN_LEFT,  movewin,   {0} },
+    {SUPER, BTN_RIGHT, resizewin, {0} },
 };

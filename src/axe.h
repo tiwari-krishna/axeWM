@@ -1,5 +1,5 @@
-#ifndef ANVLH
-#define ANVLH 
+#ifndef AXEH
+#define AXEH 
 
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
@@ -13,6 +13,7 @@
 #include <river-input-management-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
+#include <river-libinput-config-v1-client-protocol.h>
 
 typedef struct Window Window;
 typedef struct Output Output;
@@ -79,6 +80,12 @@ struct Seat {
 
   struct wl_list keys;
   struct wl_list buttons;
+
+  // State for an in-progress interactive move/resize (op_start_pointer).
+  Window *op_window;
+  int op_mode; // 0 = move, 1 = resize
+  int op_orig_x, op_orig_y, op_orig_w, op_orig_h;
+  bool op_ending;
 };
 
 typedef struct {
@@ -86,6 +93,7 @@ typedef struct {
   struct wl_list outputs;
   struct wl_list seats;
   struct wl_list keyboards;
+  struct wl_list libinput_devices;
 } WindowManager;
 
 typedef union {
@@ -124,6 +132,22 @@ typedef struct {
   Arg arg;
 } Keys;
 
+typedef struct {
+  uint32_t mods;
+  uint32_t button;
+  void (*func)(Seat *seat, Arg *arg);
+  Arg arg;
+} Mousebinds;
+
+// A simple window rule matched by app_id. -1 for tag/monitor means "leave
+// unchanged".
+typedef struct {
+  const char *app_id;
+  bool floating;
+  int tag;
+  int monitor;
+} Rule;
+
 
 void destroy_window(Seat *seat, Arg *arg);
 void select_next_mon(Seat *seat, Arg *arg);
@@ -144,6 +168,9 @@ void zoom(Seat *seat, Arg *arg);
 void togglefloating(Seat *seat, Arg *arg);
 void togglefullscreen(Seat *seat, Arg *arg);
 
+void movewin(Seat *seat, Arg *arg);
+void resizewin(Seat *seat, Arg *arg);
+
 void set_focus(Seat *seat, Window *window);
 
-#endif /* ANVLH */
+#endif /* AXEH */

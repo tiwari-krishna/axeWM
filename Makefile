@@ -1,4 +1,4 @@
-MAIN_FILE := anvl
+MAIN_FILE := axe
 
 SRC_DIR := src
 BUILD_DIR := .build
