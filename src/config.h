@@ -47,6 +47,7 @@ static const char *autostart[][8] = {
     { "mpd", NULL },
     { "foot", "-s", NULL },
     { "waybg", NULL },
+    { "axe/.build/axe-idle", NULL },
     { "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", NULL },
     { "dbus-update-activation-environment", "--systemd", "DISPLAY", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP=river", NULL },
     { "nightcolor", NULL },
