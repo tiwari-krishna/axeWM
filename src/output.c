@@ -76,7 +76,9 @@ void river_output_v1_removed(void *data, struct river_output_v1 *obj) {
     free(output);
 }
 
-void river_output_v1_wl_output(void *data, struct river_output_v1 *obj, uint32_t name) {}
+void river_output_v1_wl_output(void *data, struct river_output_v1 *obj, uint32_t name) {
+    idle_attach_wl_output((Output *) data, name);
+}
 
 void river_output_v1_position(void *data, struct river_output_v1 *obj, int32_t x, int32_t y) {
     Output *output = data;

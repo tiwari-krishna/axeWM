@@ -17,6 +17,8 @@
 #include <river-window-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-libinput-config-v1-client-protocol.h>
+#include <ext-idle-notify-v1-client-protocol.h>
+#include <wlr-output-power-management-unstable-v1-client-protocol.h>
 
 #define MIN(A, B) (A < B ? A : B)
 #define MAX(A, B) (A > B ? A : B)
@@ -82,6 +84,11 @@ struct Output {
 
     uint32_t seltag;
     uint32_t tagmask;
+
+    // For idle.c's display-off timeout only - unrelated to river's own
+    // river_output_v1, obtained via the river_output_v1.wl_output event.
+    struct wl_output *wl_output;
+    struct zwlr_output_power_v1 *power;
 };
 
 struct Seat {
@@ -104,6 +111,12 @@ struct Seat {
     bool op_move_x, op_move_y;
     int pointer_x, pointer_y;
     bool pending_warp;
+
+    // For idle.c only - obtained via the river_seat_v1.wl_seat event.
+    struct wl_seat *wl_seat;
+    bool idle_setup_done;
+    struct wl_list idle_watchers;
+    struct ext_idle_notification_v1 *display_notification;
 };
 
 typedef struct {
@@ -166,6 +179,15 @@ typedef struct {
     int monitor;
 } Rule;
 
+// A single idle-timeout entry: run `command` once the seat has been
+// inactive for `timeout_ms`, run `resume_command` (may be NULL) when
+// activity resumes.
+typedef struct {
+    int timeout_ms;
+    const char *command;
+    const char *resume_command;
+} IdleTimeout;
+
 // ---------------------------------------------------------------------
 // Global state (defined once in main.c)
 // ---------------------------------------------------------------------
@@ -180,6 +202,8 @@ extern struct river_input_manager_v1 *input_manager;
 extern struct river_window_manager_v1 *window_manager;
 extern struct river_layer_shell_v1 *layer_shell;
 extern struct river_libinput_config_v1 *libinput_config;
+extern struct ext_idle_notifier_v1 *idle_notifier;
+extern struct zwlr_output_power_manager_v1 *power_manager;
 
 // ---------------------------------------------------------------------
 // Listener tables (each defined in the .c file that owns that interface)
@@ -283,5 +307,15 @@ int count_tiled_windows(Output *output);
 // keyboard.c - xkb keymap/config handling (untouched logic, just moved)
 // ---------------------------------------------------------------------
 struct river_xkb_keymap_v1 *create_keymap(void);
+
+// ---------------------------------------------------------------------
+// idle.c - idle-timeout commands + display power off
+// ---------------------------------------------------------------------
+void idle_track_wl_seat(struct wl_registry *registry, uint32_t name);
+void idle_track_wl_output(struct wl_registry *registry, uint32_t name);
+void idle_attach_wl_seat(Seat *seat, uint32_t name);
+void idle_attach_wl_output(Output *output, uint32_t name);
+void idle_notifier_ready(void);
+void idle_power_manager_ready(void);
 
 #endif /* AXEH */

@@ -25,7 +25,9 @@ void river_seat_v1_removed(void *data, struct river_seat_v1 *obj) {
     free(seat);
 }
 
-void river_seat_v1_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {}
+void river_seat_v1_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {
+    idle_attach_wl_seat((Seat *) data, id);
+}
 
 void river_seat_v1_pointer_enter(void *data, struct river_seat_v1 *obj, struct river_window_v1 *river_window) {
     Seat *seat = data;

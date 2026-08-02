@@ -24,8 +24,28 @@ struct river_input_manager_v1 *input_manager;
 struct river_window_manager_v1 *window_manager;
 struct river_layer_shell_v1 *layer_shell;
 struct river_libinput_config_v1 *libinput_config;
+struct ext_idle_notifier_v1 *idle_notifier;
+struct zwlr_output_power_manager_v1 *power_manager;
 
 void wl_registry_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+    if(strcmp(interface, wl_seat_interface.name) == 0) {
+        idle_track_wl_seat(registry, name);
+    }
+
+    if(strcmp(interface, wl_output_interface.name) == 0) {
+        idle_track_wl_output(registry, name);
+    }
+
+    if(strcmp(interface, ext_idle_notifier_v1_interface.name) == 0) {
+        idle_notifier = wl_registry_bind(registry, name, &ext_idle_notifier_v1_interface, 1);
+        idle_notifier_ready();
+    }
+
+    if(strcmp(interface, zwlr_output_power_manager_v1_interface.name) == 0) {
+        power_manager = wl_registry_bind(registry, name, &zwlr_output_power_manager_v1_interface, 1);
+        idle_power_manager_ready();
+    }
+
     if(strcmp(interface, river_window_manager_v1_interface.name) == 0) {
         window_manager = wl_registry_bind(registry, name, &river_window_manager_v1_interface, 4);
         if(window_manager) {

@@ -47,7 +47,6 @@ static const char *autostart[][8] = {
     { "mpd", NULL },
     { "foot", "-s", NULL },
     { "waybg", NULL },
-    { "axe/.build/axe-idle", NULL },
     { "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", NULL },
     { "dbus-update-activation-environment", "--systemd", "DISPLAY", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP=river", NULL },
     { "nightcolor", NULL },
@@ -69,6 +68,17 @@ static const Rule rules[] = {
     { "file_progress",    true,    -1,  -1 },
     { "float",            true,    -1,  -1 },
 };
+
+/* idle timeouts: after this many ms of seat inactivity, run `command`;
+ * on activity resuming, run `resume_command` (NULL to skip). */
+static const IdleTimeout idle_timeouts[] = {
+    { 1200000, "systemctl suspend", NULL },
+    // { 180000, "brightnessctl -s set 10%", "brightnessctl -r" },
+};
+
+/* turn every output off via wlr-output-power-management-unstable-v1
+ * after this many ms idle, back on on resume. 0 or negative disables. */
+static const int display_off_timeout_ms = 60000;
 
 #define TAGKEY(KEY,TAG) \
 {SUPER,               KEY, view,       { .u = 1 << TAG } }, \
