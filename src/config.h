@@ -16,6 +16,7 @@ static const float mfact = 0.5; /* initial master area size [0.05 .. 0.95] */
 static const unsigned int borderpx = 2;
 static const uint8_t bordercolor_focus[4]  = { 0xd8, 0xde, 0xe9, 0xff };
 static const uint8_t bordercolor_normal[4] = { 0x4c, 0x56, 0x6a, 0xff };
+static const uint8_t bordercolor_float[4]  = { 0xd8, 0xa8, 0x4c, 0xff };
 
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";

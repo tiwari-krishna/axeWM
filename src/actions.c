@@ -91,22 +91,21 @@ void set_focus(Seat *seat, Window *window) {
 // Give a window a default centered floating geometry, if it doesn't
 // already have one remembered.
 void float_default_geometry(Window *w) {
-    // if(w->floatw != 0 || w->floath != 0) return;
-    //
-    // w->floatw = w->mon->nex_w * 6 / 10;
-    // w->floath = w->mon->nex_h * 6 / 10;
-    // w->floatx = (w->mon->nex_w - w->floatw) / 2;
-    // w->floaty = (w->mon->nex_h - w->floath) / 2;
     if(w->floatw != 0 || w->floath != 0) return;
 
-    // Default to the window's own current/natural content size (e.g.
-    // mpv's native video resolution) instead of an arbitrary fraction of
-    // the screen, clamped so it can never exceed the monitor's usable
-    // area, and centered. If this runs before the window's real size is
-    // known, river_window_v1_dimensions() below corrects it once it
-    // arrives - still before the window is ever displayed.
-    w->floatw = w->width;
-    w->floath = w->height;
+    if(w->got_real_dimensions) {
+        // We've actually heard back from the client at least once, so
+        // width/height reflects its real/preferred size rather than the
+        // full-monitor placeholder proposed at creation - use it.
+        w->floatw = w->width;
+        w->floath = w->height;
+    } else {
+        // Don't know yet - use a fraction of the screen instead of the
+        // full-monitor placeholder, which is what was causing freshly-
+        // floated windows to sometimes open full-screen.
+        w->floatw = w->mon->nex_w * 6 / 10;
+        w->floath = w->mon->nex_h * 6 / 10;
+    }
 
     clamp_float_geometry(w, w->mon);
 

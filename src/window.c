@@ -40,12 +40,16 @@ void apply_rules(Window *window, const char *app_id) {
 }
 
 void window_set_position(Window *window, int x, int y) {
-    window->x = x + window->mon->nex_x;
-    window->y = y + window->mon->nex_y;
+    int abs_x = x + window->mon->nex_x;
+    int abs_y = y + window->mon->nex_y;
+    if(abs_x == window->x && abs_y == window->y) return; // nothing changed, skip the wire request
+    window->x = abs_x;
+    window->y = abs_y;
     river_node_v1_set_position(window->river_node, window->x, window->y);
 }
 
 void window_set_dimensions(Window *window, int width, int height) {
+    if(width == window->width && height == window->height) return;
     window->width = width;
     window->height = height;
     river_window_v1_propose_dimensions(window->river_window, window->width, window->height);
@@ -57,16 +61,16 @@ void window_set_dimensions(Window *window, int width, int height) {
 #define CHAN32(c) ((uint32_t)(c) * 0x01010101u)
 
 void render_window(Window *window) {
-    // const uint8_t *rgba = window->focused ? bordercolor_focus : bordercolor_normal;
-    // river_window_v1_set_borders(window->river_window,
-    //                             RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
-    //                             RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT,
-    //                             borderpx, CHAN32(rgba[0]), CHAN32(rgba[1]), CHAN32(rgba[2]), CHAN32(rgba[3]));
-    // Floating windows are borderless and always sit above tiling - see
-    // manage_start()/manage_seat(). Setting edges to none disables the
-    // border per protocol.
     if(window->floating) {
-        river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
+        // Floating windows always sit above tiling (manage_start()/
+        // manage_seat()) and get their own fixed border color,
+        // independent of focus - so they stay visually distinct from
+        // tiled windows without a color flicker every time focus moves.
+        river_window_v1_set_borders(window->river_window,
+                                    RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
+                                    RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT,
+                                    borderpx, CHAN32(bordercolor_float[0]), CHAN32(bordercolor_float[1]),
+                                    CHAN32(bordercolor_float[2]), CHAN32(bordercolor_float[3]));
         return;
     }
 
@@ -113,22 +117,49 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
 
 void river_window_v1_dimensions_hint(void *data, struct river_window_v1 *obj, int32_t min_width, int32_t min_height, int32_t max_width, int32_t max_height) {}
 
+// Is `window` the subject of an active interactive move/resize on any
+// seat? While true, op_delta() in seat.c is the authoritative source for
+// floatw/floath/floatx/floaty - a dimensions echo below is a response to
+// our own in-flight per-frame proposal, not new information. Acting on
+// it anyway is what was causing the resize flicker/CPU spike (propose ->
+// echo -> recenter -> propose (now moved) -> echo -> recenter -> ...)
+// and the "resize fights back" feeling.
+static bool window_has_active_op(Window *window) {
+    Seat *seat;
+    wl_list_for_each(seat, &axe.seats, link) {
+        if(seat->op_window == window) return true;
+    }
+    return false;
+}
+
 void river_window_v1_dimensions(void *data, struct river_window_v1 *obj, int32_t width, int32_t height) {
     struct Window *window = data;
     window->width = width;
     window->height = height;
 
-    // If a floating window's content reports a size different from what
-    // we last proposed for it (its first-ever size report, or e.g. a
-    // video player picking up a new video at a different resolution),
-    // adopt it as the new floating size - clamped to the monitor - and
-    // re-center. If it matches what we last proposed (notably, right
-    // after a manual mouse-resize, since that's echoed straight back),
-    // leave floatx/y alone so a manual resize/position isn't fought.
-    if(window->floating && (width != window->floatw || height != window->floath)) {
-        window->floatw = width;
-        window->floath = height;
-        clamp_float_geometry(window, window->mon);
+    if(!window->floating) {
+        window->got_real_dimensions = true;
+        return;
+    }
+
+    // Mid-drag, ignore this entirely - see window_has_active_op() above.
+    if(window_has_active_op(window)) return;
+
+    bool first_real_size = !window->got_real_dimensions;
+    window->got_real_dimensions = true;
+
+    if(width == window->floatw && height == window->floath) return; // just an echo, nothing changed
+
+    window->floatw = width;
+    window->floath = height;
+    clamp_float_geometry(window, window->mon);
+
+    // Only recenter the one time we first learn this window's real size
+    // - i.e. right when it's established as floating. Later adoptions
+    // (a video player switching resolution, or a client pushing back on
+    // a size we proposed) intentionally leave floatx/y alone, per your
+    // ask: recenter on creation only, not on every resize.
+    if(first_real_size) {
         window->floatx = (window->mon->nex_w - window->floatw) / 2;
         window->floaty = (window->mon->nex_h - window->floath) / 2;
     }
