@@ -130,10 +130,6 @@ void manage_seat(Seat *seat) {
         }
 
         set_focus(seat, found);
-
-        if(seat->focused != NULL) {
-            river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
-        }
     }
 
     if(seat->focused != NULL) {
@@ -142,9 +138,15 @@ void manage_seat(Seat *seat) {
         if(seat->focused->floating || seat->focused->fullscreen) {
             river_node_v1_place_top(seat->focused->river_node);
         }
+        if(seat->pending_warp) {
+            river_seat_v1_pointer_warp(seat->river_seat,
+                seat->focused->x + seat->focused->width/2,
+                seat->focused->y + seat->focused->height/2);
+        }
     } else {
         river_seat_v1_clear_focus(seat->river_seat);
     }
+    seat->pending_warp = false;
 }
 
 void render_seat(Seat *seat) {}

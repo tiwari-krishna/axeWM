@@ -102,6 +102,7 @@ struct Seat {
 
     bool op_move_x, op_move_y;
     int pointer_x, pointer_y;
+    bool pending_warp;
 };
 
 typedef struct {

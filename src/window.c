@@ -99,7 +99,11 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
     Seat *seat;
     wl_list_for_each(seat, &axe.seats, link) {
         if(seat->focused == window) {
-            set_focus(seat, NULL);
+            Window *next = adjacent_visible(window, -1);
+            if(next == NULL) next = adjacent_visible(window, +1);
+            set_focus(seat, next);
+            // set_focus(seat, NULL);
+            seat->pending_warp = true;
         }
         if(seat->hovered == window) {
             seat->hovered = NULL;
@@ -281,5 +285,6 @@ void river_window_manager_v1_window(void *data, struct river_window_manager_v1 *
     Seat *seat;
     wl_list_for_each(seat, &axe.seats, link) {
         set_focus(seat, window);
+        seat->pending_warp = true;
     }
 }

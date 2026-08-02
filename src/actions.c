@@ -140,7 +140,10 @@ void clamp_float_geometry(Window *w, Output *mon) {
 // marks the end of the table.
 void run_autostart(void) {
     for(int i = 0; autostart[i][0] != NULL; i++) {
-        if(fork() == 0) execvp(autostart[i][0], (char **) autostart[i]);
+        if(fork() == 0) {
+            execvp(autostart[i][0], (char **) autostart[i]);
+            _exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -184,7 +187,8 @@ void movemon(Seat *seat, Arg *arg) {
     clamp_float_geometry(w, target);
 
     selmon = target;
-    river_seat_v1_pointer_warp(seat->river_seat, selmon->x + selmon->width/2, selmon->y + selmon->height/2);
+    seat->pending_warp = true;
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 void focus_next(Seat *seat, Arg *arg) {
@@ -211,6 +215,7 @@ void incnmaster(Seat *seat, Arg *arg) {
     if(seat->focused != NULL) {
         seat->focused->mon->nmaster += arg->i;
         CLAMP(seat->focused->mon->nmaster, 0, (1 << 16));
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -218,6 +223,7 @@ void setmfact(Seat *seat, Arg *arg) {
     if(seat->focused != NULL) {
         seat->focused->mon->mfact += arg->f;
         CLAMP(seat->focused->mon->mfact, 0, 1);
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -225,6 +231,7 @@ void view(Seat *seat, Arg *arg) {
     if(selmon != NULL) {
         selmon->seltag = arg->u;
         selmon->tagmask = arg->u;
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -246,11 +253,13 @@ void toggleview(Seat *seat, Arg *arg) {
     if(arg->u == selmon->seltag) {
         selmon->seltag = selmon->tagmask & -selmon->tagmask;
     }
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 void tag(Seat *seat, Arg *arg) {
     if(seat->focused != NULL) {
         seat->focused->tagmask = arg->u;
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -261,6 +270,7 @@ void toggletag(Seat *seat, Arg *arg) {
         if(seat->focused->tagmask == 0) {
             seat->focused->tagmask = selmon->seltag;
         }
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -273,9 +283,9 @@ void movestack(Seat *seat, Arg *arg) {
     Window *other = adjacent_tiled(seat->focused, arg->i);
     if(other == NULL) return;
 
-    river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
     list_swap(&seat->focused->link, &other->link);
-
+    seat->pending_warp = true;
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 // Swap the focused window into the master slot. If it is already the
@@ -295,11 +305,18 @@ void zoom(Seat *seat, Arg *arg) {
 
     if(master == NULL || master == w) {
         Window *other = adjacent_tiled(w, +1);
-        if(other != NULL) list_swap(&w->link, &other->link);
+        // if(other != NULL) list_swap(&w->link, &other->link);
+        if(other != NULL) {
+            list_swap(&w->link, &other->link);
+            seat->pending_warp = true;
+            river_window_manager_v1_manage_dirty(window_manager);
+        }
         return;
     }
 
     list_swap(&w->link, &master->link);
+    seat->pending_warp = true;
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 // Toggle the focused window between tiled and floating. Floating windows
@@ -312,11 +329,13 @@ void togglefloating(Seat *seat, Arg *arg) {
     w->floating = !w->floating;
 
     if(w->floating) float_default_geometry(w);
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 void togglefullscreen(Seat *seat, Arg *arg) {
     if(seat->focused == NULL) return;
     seat->focused->fullscreen = !seat->focused->fullscreen;
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 // Start an interactive move of the hovered window via mouse drag. Only
@@ -361,5 +380,8 @@ void exit_session(Seat *seat, Arg *arg) {
 }
 
 void spawn(Seat *seat, Arg *arg) {
-    if(fork() == 0) execvp(((char **) arg->v)[0], (char **) arg->v);
+    if(fork() == 0) {
+        execvp(((char **) arg->v)[0], (char **) arg->v);
+        _exit(EXIT_FAILURE);
+    }
 }
