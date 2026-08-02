@@ -42,7 +42,9 @@ void apply_rules(Window *window, const char *app_id) {
 void window_set_position(Window *window, int x, int y) {
     int abs_x = x + window->mon->nex_x;
     int abs_y = y + window->mon->nex_y;
-    if(abs_x == window->x && abs_y == window->y) return; // nothing changed, skip the wire request
+    // if(abs_x == window->x && abs_y == window->y) return; // nothing changed, skip the wire request
+    if(window->got_position && abs_x == window->x && abs_y == window->y) return;
+    window->got_position = true;
     window->x = abs_x;
     window->y = abs_y;
     river_node_v1_set_position(window->river_node, window->x, window->y);
@@ -250,6 +252,8 @@ void river_window_manager_v1_window(void *data, struct river_window_manager_v1 *
     window->river_node = river_window_v1_get_node(window->river_window);
     window->hovered = false;
     window->focused = false;
+    window->width = -1;
+    window->height = -1;
     // window->mon = selmon;
     // window->tagmask = selmon->seltag;
 
@@ -276,8 +280,8 @@ void river_window_manager_v1_window(void *data, struct river_window_manager_v1 *
                               RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
                               RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT);
 
-    window_set_position(window, 0, 0);
-    window_set_dimensions(window, window->mon->nex_w, window->mon->nex_h);
+    // window_set_position(window, 0, 0);
+    // window_set_dimensions(window, window->mon->nex_w, window->mon->nex_h);
 
     // Focus the new window for every seat. Fine for the common single-seat
     // desktop; a multi-seat setup may want to only focus for whichever seat

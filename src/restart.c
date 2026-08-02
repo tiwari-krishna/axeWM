@@ -124,6 +124,7 @@ void apply_saved_window_state(Window *window) {
         window->floaty = w->floaty;
         window->floatw = w->floatw;
         window->floath = w->floath;
+        window->got_real_dimensions = true;
 
         Output *mon = output_by_index(w->mon_index);
         if(mon != NULL) window->mon = mon;

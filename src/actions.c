@@ -94,23 +94,12 @@ void float_default_geometry(Window *w) {
     if(w->floatw != 0 || w->floath != 0) return;
 
     if(w->got_real_dimensions) {
-        // We've actually heard back from the client at least once, so
-        // width/height reflects its real/preferred size rather than the
-        // full-monitor placeholder proposed at creation - use it.
         w->floatw = w->width;
         w->floath = w->height;
-    } else {
-        // Don't know yet - use a fraction of the screen instead of the
-        // full-monitor placeholder, which is what was causing freshly-
-        // floated windows to sometimes open full-screen.
-        w->floatw = w->mon->nex_w * 6 / 10;
-        w->floath = w->mon->nex_h * 6 / 10;
+        clamp_float_geometry(w, w->mon);
+        w->floatx = (w->mon->nex_w - w->floatw) / 2;
+        w->floaty = (w->mon->nex_h - w->floath) / 2;
     }
-
-    clamp_float_geometry(w, w->mon);
-
-    w->floatx = (w->mon->nex_w - w->floatw) / 2;
-    w->floaty = (w->mon->nex_h - w->floath) / 2;
 }
 
 // Clamp a window's remembered floating geometry (size and position) to

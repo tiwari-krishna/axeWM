@@ -55,6 +55,7 @@ struct Window {
     Output *mon;
     uint32_t tagmask;
     bool got_real_dimensions;
+    bool got_position;
 };
 
 struct Output {
