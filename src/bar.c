@@ -289,9 +289,8 @@ static void redraw(Output *o) {
         if(sel) fill_rect(buf, w, h, x, 0, x + cellw, h, bar_sel_bg_color);
 
         char label[2] = { (char) ('1' + t), '\0' };
-        const uint8_t *color = occ ? bar_tag_fg_color : bordercolor_normal; // reuse existing "dim" color rather than adding a 4th
         int tw = measure_text_width(label);
-        draw_text(buf, w, h, x + (cellw - tw) / 2, label, color);
+        draw_text(buf, w, h, x + (cellw - tw) / 2, label, bar_tag_fg_color);
 
         x += cellw;
     }
