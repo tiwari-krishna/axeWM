@@ -226,8 +226,9 @@ static void redraw(Output *o) {
         extern const struct zwlr_layer_surface_v1_listener bar_layer_surface_listener;
         zwlr_layer_surface_v1_add_listener(o->bar_layer_surface, &bar_layer_surface_listener, o);
 
-        zwlr_layer_surface_v1_set_anchor(o->bar_layer_surface,
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+        uint32_t anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+        anchor |= bar_at_bottom ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+        zwlr_layer_surface_v1_set_anchor(o->bar_layer_surface, anchor);
         zwlr_layer_surface_v1_set_size(o->bar_layer_surface, 0, bar_height); // 0 width = "fill anchored edges"
         zwlr_layer_surface_v1_set_exclusive_zone(o->bar_layer_surface, bar_height);
 

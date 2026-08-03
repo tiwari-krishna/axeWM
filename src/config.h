@@ -19,6 +19,7 @@ static const uint8_t bordercolor_normal[4] = { 0x4c, 0x56, 0x6a, 0xff };
 static const uint8_t bordercolor_float[4]  = { 0xd8, 0xa8, 0x4c, 0xff };
 
 /* status bar */
+static const bool bar_at_bottom = true; /* false = top of screen, true = bottom */
 static const int bar_height = 18;
 static const char *bar_font_name = "Noto Sans";
 static const int bar_font_size = 16;
