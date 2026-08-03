@@ -116,7 +116,9 @@ void wl_registry_global(void *data, struct wl_registry *registry, uint32_t name,
     }
 }
 
-void wl_registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {}
+void wl_registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
+    fprintf(stderr, "warning: registry global %u removed unexpectedly\n", name);
+}
 
 const struct wl_registry_listener registry_listener = {
     .global = wl_registry_global,
@@ -177,32 +179,38 @@ int main(int argc, char **argv) {
     if(!skip_autostart) run_autostart();
 
     while(true) {
-        // if(wl_display_dispatch(display) < 0) {
         while(wl_display_prepare_read(display) != 0) {
             if(wl_display_dispatch_pending(display) < 0) {
                 fprintf(stderr, "dispatch failed\n");
                 return 1;
             }
         }
-        if(wl_display_flush(display) < 0 && errno != EAGAIN) {
-            fprintf(stderr, "dispatch failed\n");
-            wl_display_cancel_read(display);
-            return 1;
+        bool flush_incomplete = false;
+        if(wl_display_flush(display) < 0) {
+            if(errno != EAGAIN) {
+                fprintf(stderr, "dispatch failed\n");
+                wl_display_cancel_read(display);
+                return 1;
+            }
+            flush_incomplete = true;
         }
 
         int status_fd = bar_status_fd();
         struct pollfd fds[2] = {
-            { .fd = wl_display_get_fd(display), .events = POLLIN },
+            { .fd = wl_display_get_fd(display), .events = POLLIN | (flush_incomplete ? POLLOUT : 0) },
             { .fd = status_fd, .events = POLLIN },
         };
         nfds_t nfds = status_fd >= 0 ? 2 : 1;
 
         if(poll(fds, nfds, -1) < 0) {
+            fprintf(stderr, "dispatch failed\n");
             wl_display_cancel_read(display);
             if(errno == EINTR) continue;
             fprintf(stderr, "poll failed\n");
             return 1;
         }
+
+        if(fds[0].revents & POLLOUT) wl_display_flush(display);
 
         if(fds[0].revents & POLLIN) {
             wl_display_read_events(display);
