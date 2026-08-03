@@ -140,6 +140,7 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
         manage_seat(seat);
     }
 
+    bar_redraw_all();
     river_window_manager_v1_manage_finish(window_manager);
 }
 

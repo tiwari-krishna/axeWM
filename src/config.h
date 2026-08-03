@@ -18,6 +18,16 @@ static const uint8_t bordercolor_focus[4]  = { 0xd8, 0xde, 0xe9, 0xff };
 static const uint8_t bordercolor_normal[4] = { 0x4c, 0x56, 0x6a, 0xff };
 static const uint8_t bordercolor_float[4]  = { 0xd8, 0xa8, 0x4c, 0xff };
 
+/* status bar */
+static const int bar_height = 18;
+static const char *bar_font_name = "Noto Sans";
+static const int bar_font_size = 16;
+static const uint8_t bar_bg_color[4]     = { 0x1a, 0x1b, 0x26, 0xff }; /* whole bar background */
+static const uint8_t bar_tag_fg_color[4] = { 0xd8, 0xde, 0xe9, 0xff }; /* occupied-tag text + status text */
+static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highlight behind the current tag */
+/* runs once at startup, output captured and shown on the right - NULL to disable */
+static const char *bar_status_cmd = "stat-timedate";
+
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";
 static const char *xkb_options = "grp:sclk_toggle";

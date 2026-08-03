@@ -27,7 +27,25 @@ struct river_libinput_config_v1 *libinput_config;
 struct ext_idle_notifier_v1 *idle_notifier;
 struct zwlr_output_power_manager_v1 *power_manager;
 
+struct wl_compositor *compositor;
+struct wl_shm *shm;
+struct zwlr_layer_shell_v1 *wlr_layer_shell;
+
 void wl_registry_global(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+    if(strcmp(interface, wl_compositor_interface.name) == 0) {
+        compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+        bar_manager_ready();
+    }
+
+    if(strcmp(interface, wl_shm_interface.name) == 0) {
+        shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+        bar_manager_ready();
+    }
+
+    if(strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+        wlr_layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
+        bar_manager_ready();
+    }
     if(strcmp(interface, wl_seat_interface.name) == 0) {
         idle_track_wl_seat(registry, name);
     }
@@ -108,6 +126,8 @@ int main(int argc, char **argv) {
     saved_argv = argv;
     load_restart_state();
     xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+     bar_init();
 
     struct wl_display *display = wl_display_connect(NULL);
     if(display == NULL) {

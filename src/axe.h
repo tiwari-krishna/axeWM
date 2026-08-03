@@ -19,6 +19,7 @@
 #include <river-libinput-config-v1-client-protocol.h>
 #include <ext-idle-notify-v1-client-protocol.h>
 #include <wlr-output-power-management-unstable-v1-client-protocol.h>
+#include <wlr-layer-shell-unstable-v1-client-protocol.h>
 
 #define MIN(A, B) (A < B ? A : B)
 #define MAX(A, B) (A > B ? A : B)
@@ -89,6 +90,16 @@ struct Output {
     // river_output_v1, obtained via the river_output_v1.wl_output event.
     struct wl_output *wl_output;
     struct zwlr_output_power_v1 *power;
+
+    // For bar.c only.
+    struct wl_surface *bar_surface;
+    struct zwlr_layer_surface_v1 *bar_layer_surface;
+    struct wl_buffer *bar_buffer;
+    int bar_configured_w, bar_configured_h;
+    int bar_buf_w;
+    int bar_buf_h;
+    uint32_t bar_last_occupied; // cached, to skip redundant redraws
+    uint32_t bar_last_seltag;
 };
 
 struct Seat {
@@ -204,6 +215,9 @@ extern struct river_layer_shell_v1 *layer_shell;
 extern struct river_libinput_config_v1 *libinput_config;
 extern struct ext_idle_notifier_v1 *idle_notifier;
 extern struct zwlr_output_power_manager_v1 *power_manager;
+extern struct wl_compositor *compositor;
+extern struct wl_shm *shm;
+extern struct zwlr_layer_shell_v1 *wlr_layer_shell;
 
 // ---------------------------------------------------------------------
 // Listener tables (each defined in the .c file that owns that interface)
@@ -313,9 +327,19 @@ struct river_xkb_keymap_v1 *create_keymap(void);
 // ---------------------------------------------------------------------
 void idle_track_wl_seat(struct wl_registry *registry, uint32_t name);
 void idle_track_wl_output(struct wl_registry *registry, uint32_t name);
+void idle_teardown_seat(Seat *seat);
 void idle_attach_wl_seat(Seat *seat, uint32_t name);
 void idle_attach_wl_output(Output *output, uint32_t name);
 void idle_notifier_ready(void);
 void idle_power_manager_ready(void);
+
+// ---------------------------------------------------------------------
+// bar.c - status bar (tags + one-shot status command) via wlr-layer-shell
+// ---------------------------------------------------------------------
+void bar_init(void);
+void bar_output_ready(Output *output);
+void bar_manager_ready(void);
+void bar_redraw_all(void);
+void bar_destroy(Output *output);
 
 #endif /* AXEH */

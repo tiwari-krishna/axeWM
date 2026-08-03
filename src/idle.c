@@ -169,3 +169,20 @@ void idle_power_manager_ready(void) {
         ensure_output_power(o);
     }
 }
+
+void idle_teardown_seat(Seat *seat) {
+    if(seat->idle_setup_done) {
+        IdleWatcher *w, *w_tmp;
+        wl_list_for_each_safe(w, w_tmp, &seat->idle_watchers, link) {
+            ext_idle_notification_v1_destroy(w->notification);
+            wl_list_remove(&w->link);
+            free(w);
+        }
+        if(seat->display_notification != NULL) {
+            ext_idle_notification_v1_destroy(seat->display_notification);
+        }
+    }
+    if(seat->wl_seat != NULL) {
+        wl_seat_destroy(seat->wl_seat);
+    }
+}

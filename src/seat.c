@@ -20,6 +20,8 @@ void river_seat_v1_removed(void *data, struct river_seat_v1 *obj) {
         river_layer_shell_seat_v1_destroy(seat->river_layer_shell_seat);
     }
 
+    idle_teardown_seat(seat);
+
     river_seat_v1_destroy(seat->river_seat);
     wl_list_remove(&seat->link);
     free(seat);
