@@ -92,6 +92,7 @@ void bar_status_readable(void) {
             // showing its last known text rather than going blank.
             close(status_fd);
             status_fd = -1;
+            status_pid = -1;
         }
         return;
     }
@@ -237,6 +238,7 @@ static int measure_text_width(const char *s) {
         if(is_emoji && face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
             // Mirror draw_text's scale-to-line-height math exactly, or
             // measured width won't match what actually gets drawn.
+            if(face->glyph->bitmap.rows == 0) continue;
             int target_h = bar_height - 2;
             float scale = (float) target_h / (float) face->glyph->bitmap.rows;
             width += (int) (face->glyph->bitmap.width * scale);
@@ -285,6 +287,7 @@ static void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const ui
         FT_GlyphSlot g = face->glyph;
 
         if(is_emoji && g->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+            if(g->bitmap.rows == 0) continue;
             int target_h = h - 2;
             float scale = (float) target_h / (float) g->bitmap.rows;
             int dst_w = (int) (g->bitmap.width * scale);
