@@ -173,6 +173,7 @@ void restart_axe(Seat *seat, Arg *arg) {
         exec_argv[saved_argc + 1] = NULL;
     }
 
+    bar_kill_status();
     execvp(exec_argv[0], exec_argv);
 
     // Only reached if execvp itself failed (binary missing, bad perms).

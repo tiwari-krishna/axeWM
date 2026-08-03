@@ -10,6 +10,8 @@
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <poll.h>
 
 #include "axe.h"
 
@@ -127,7 +129,7 @@ int main(int argc, char **argv) {
     load_restart_state();
     xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
-     bar_init();
+    bar_init();
 
     struct wl_display *display = wl_display_connect(NULL);
     if(display == NULL) {
@@ -175,9 +177,46 @@ int main(int argc, char **argv) {
     if(!skip_autostart) run_autostart();
 
     while(true) {
-        if(wl_display_dispatch(display) < 0) {
+        // if(wl_display_dispatch(display) < 0) {
+        while(wl_display_prepare_read(display) != 0) {
+            if(wl_display_dispatch_pending(display) < 0) {
+                fprintf(stderr, "dispatch failed\n");
+                return 1;
+            }
+        }
+        if(wl_display_flush(display) < 0 && errno != EAGAIN) {
+            fprintf(stderr, "dispatch failed\n");
+            wl_display_cancel_read(display);
+            return 1;
+        }
+
+        int status_fd = bar_status_fd();
+        struct pollfd fds[2] = {
+            { .fd = wl_display_get_fd(display), .events = POLLIN },
+            { .fd = status_fd, .events = POLLIN },
+        };
+        nfds_t nfds = status_fd >= 0 ? 2 : 1;
+
+        if(poll(fds, nfds, -1) < 0) {
+            wl_display_cancel_read(display);
+            if(errno == EINTR) continue;
+            fprintf(stderr, "poll failed\n");
+            return 1;
+        }
+
+        if(fds[0].revents & POLLIN) {
+            wl_display_read_events(display);
+        } else {
+            wl_display_cancel_read(display);
+        }
+
+        if(wl_display_dispatch_pending(display) < 0) {
             fprintf(stderr, "dispatch failed\n");
             return 1;
+        }
+
+        if(nfds == 2 && (fds[1].revents & (POLLIN | POLLHUP))) {
+            bar_status_readable();
         }
     }
 

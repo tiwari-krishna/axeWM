@@ -100,6 +100,7 @@ struct Output {
     int bar_buf_h;
     uint32_t bar_last_occupied; // cached, to skip redundant redraws
     uint32_t bar_last_seltag;
+    uint32_t bar_last_status_epoch;
 };
 
 struct Seat {
@@ -341,5 +342,8 @@ void bar_output_ready(Output *output);
 void bar_manager_ready(void);
 void bar_redraw_all(void);
 void bar_destroy(Output *output);
+int bar_status_fd(void);
+void bar_status_readable(void);
+void bar_kill_status(void);
 
 #endif /* AXEH */

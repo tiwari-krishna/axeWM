@@ -3,10 +3,14 @@
 #endif
 
 #include <fcntl.h>
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <ft2build.h>
@@ -21,6 +25,102 @@ static FT_Face ft_face; // NULL if font load failed - drawing text becomes a no-
 static int baseline_y;
 
 static char cmd_output[256] = "";
+
+static int status_fd = -1;
+static pid_t status_pid = -1;
+static char status_line_buf[512];
+static size_t status_line_len = 0;
+static uint32_t status_epoch = 0; // bumped on every status text change - see redraw()'s dedup check
+
+// Spawn bar_status_cmd once, left running for the lifetime of this axe
+// process. Its stdout is piped back to us non-blocking; bar_status_readable()
+// turns each newline-terminated line into the new status text. Runs in its
+// own process group (setpgid) so bar_kill_status() can reach a backgrounded
+// job the script itself might spawn (e.g. `sleep infinity &`), not just the
+// top-level shell.
+static void spawn_status(void) {
+    if(bar_status_cmd == NULL) return;
+
+    int fds[2];
+    if(pipe(fds) != 0) {
+        fprintf(stderr, "bar: pipe() failed for status command\n");
+        return;
+    }
+
+    pid_t pid = fork();
+    if(pid < 0) {
+        fprintf(stderr, "bar: fork() failed for status command\n");
+        close(fds[0]);
+        close(fds[1]);
+        return;
+    }
+
+    if(pid == 0) {
+        setpgid(0, 0);
+        close(fds[0]);
+        dup2(fds[1], STDOUT_FILENO);
+        close(fds[1]);
+        execlp("/bin/sh", "/bin/sh", "-c", bar_status_cmd, NULL);
+        fprintf(stderr, "bar: exec failed for status command '%s'\n", bar_status_cmd);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(fds[1]);
+    fcntl(fds[0], F_SETFL, fcntl(fds[0], F_GETFL, 0) | O_NONBLOCK);
+    fcntl(fds[0], F_SETFD, FD_CLOEXEC); // don't leak this fd across restart_axe()'s execvp
+    status_fd = fds[0];
+    status_pid = pid;
+}
+
+int bar_status_fd(void) {
+    return status_fd;
+}
+
+// Called from main.c's event loop when poll() says status_fd is readable.
+void bar_status_readable(void) {
+    char chunk[256];
+    ssize_t n = read(status_fd, chunk, sizeof(chunk));
+
+    if(n <= 0) {
+        if(n == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+            // Script exited or the pipe broke - stop polling it. Bar keeps
+            // showing its last known text rather than going blank.
+            close(status_fd);
+            status_fd = -1;
+        }
+        return;
+    }
+
+    for(ssize_t i = 0; i < n; i++) {
+        if(chunk[i] == '\n') {
+            if(status_line_len > 0) {
+                status_line_buf[status_line_len] = '\0';
+                strncpy(cmd_output, status_line_buf, sizeof(cmd_output) - 1);
+                cmd_output[sizeof(cmd_output) - 1] = '\0';
+                status_epoch++;
+                bar_redraw_all();
+            }
+            status_line_len = 0;
+        } else if(status_line_len < sizeof(status_line_buf) - 1) {
+            status_line_buf[status_line_len++] = chunk[i];
+        }
+        // else: an unreasonably long line - drop the overflow rather than
+        // corrupt memory; a misbehaving script can't crash the bar.
+    }
+}
+
+// Called once, right before restart_axe()'s execvp() - without this, every
+// restart leaks a new copy of the status script (it survives the parent's
+// self-exec as an orphan, forever). Negative pid = whole process group,
+// so a backgrounded job inside the script (like `sleep infinity &`) gets
+// caught too, not just the top-level shell.
+void bar_kill_status(void) {
+    if(status_pid > 0) {
+        kill(-status_pid, SIGTERM);
+        status_pid = -1;
+    }
+}
+
 
 void bar_init(void) {
     if(FT_Init_FreeType(&ft_library) != 0) {
@@ -61,21 +161,7 @@ void bar_init(void) {
     int line_h = ascender - descender;
     baseline_y = (bar_height - line_h) / 2 + ascender;
 
-    // Run the status command exactly once, synchronously - this does
-    // block startup until it returns, which is fine for something quick
-    // (uname, date, a battery-percent script) but worth knowing if you
-    // ever point it at something slow.
-    if(bar_status_cmd != NULL) {
-        FILE *p = popen(bar_status_cmd, "r");
-        if(p != NULL) {
-            size_t n = fread(cmd_output, 1, sizeof(cmd_output) - 1, p);
-            cmd_output[n] = '\0';
-            while(n > 0 && (cmd_output[n-1] == '\n' || cmd_output[n-1] == '\r')) cmd_output[--n] = '\0';
-            pclose(p);
-        } else {
-            fprintf(stderr, "bar: failed to run status command '%s'\n", bar_status_cmd);
-        }
-    }
+    spawn_status();
 }
 
 static int measure_text_width(const char *s) {
@@ -170,12 +256,12 @@ static void redraw(Output *o) {
     // Skip the redraw entirely if nothing that would change the pixels
     // has actually changed - bar_redraw_all() gets called on every
     // manage_start, including mid-drag frames.
-    // if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag) {
-    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag) {
+    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag && o->bar_last_status_epoch == status_epoch) {
         return;
     }
     o->bar_last_occupied = occupied;
     o->bar_last_seltag = o->seltag;
+    o->bar_last_status_epoch = status_epoch;
 
     int stride = w * 4;
     int size = stride * h;
@@ -199,6 +285,7 @@ static void redraw(Output *o) {
     for(int t = 0; t < 9; t++) {
         bool sel = (o->seltag & (1u << t)) != 0;
         bool occ = (occupied & (1u << t)) != 0;
+        if(!sel && !occ) continue;
         if(sel) fill_rect(buf, w, h, x, 0, x + cellw, h, bar_sel_bg_color);
 
         char label[2] = { (char) ('1' + t), '\0' };
@@ -241,9 +328,12 @@ static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *obj) 
     Output *o = data;
     zwlr_layer_surface_v1_destroy(o->bar_layer_surface);
     wl_surface_destroy(o->bar_surface);
+    if(o->bar_buffer != NULL) wl_buffer_destroy(o->bar_buffer);
     o->bar_layer_surface = NULL;
     o->bar_surface = NULL;
+    o->bar_buffer = NULL;
     o->bar_configured_w = 0;
+    o->bar_configured_h = 0;
 }
 
 const struct zwlr_layer_surface_v1_listener bar_layer_surface_listener = {

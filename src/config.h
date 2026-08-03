@@ -25,8 +25,10 @@ static const int bar_font_size = 16;
 static const uint8_t bar_bg_color[4]     = { 0x1a, 0x1b, 0x26, 0xff }; /* whole bar background */
 static const uint8_t bar_tag_fg_color[4] = { 0xd8, 0xde, 0xe9, 0xff }; /* occupied-tag text + status text */
 static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highlight behind the current tag */
-/* runs once at startup, output captured and shown on the right - NULL to disable */
-static const char *bar_status_cmd = "stat-timedate";
+/* spawned once at startup and left running; each newline it writes to
+ * stdout becomes the new status text (no polling - update on your own
+ * schedule, e.g. via a signal to your own script). NULL to disable. */
+static const char *bar_status_cmd = "stat-sway";
 
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";
@@ -132,7 +134,7 @@ static Keys keybinds[] = {
     // {SUPER,         XKB_KEY_w,      spawn,           SHCMD("$BROWSER")},
     // {ALT|SHIFT,     XKB_KEY_space,  spawn,           SHCMD("mpc toggle")},
     // {SUPER,         XKB_KEY_space,  spawn,           { .v = launchercmd } },
-
+    {SUPER,                 XKB_KEY_b,              spawn,          SHCMD("kill -USR1 $(cat /tmp/sway-status.pid)")},
     /* Clipboard & Notes */
     { SUPER|SHIFT,          XKB_KEY_v,              spawn,          SHCMD("clip2Note") },
     { SUPER,                XKB_KEY_z,              spawn,          SHCMD("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy") },
