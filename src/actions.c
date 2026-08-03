@@ -224,6 +224,10 @@ void view(Seat *seat, Arg *arg) {
     }
 }
 
+void togglebar(Seat *seat, Arg *arg) {
+    bar_toggle();
+}
+
 void toggleview(Seat *seat, Arg *arg) {
     if(selmon == NULL) return;
 

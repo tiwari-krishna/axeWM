@@ -153,6 +153,7 @@ typedef struct {
     Seat *seat;
 
     void (*func)(Seat *seat, Arg *arg);
+    void (*release_func)(Seat *seat, Arg *arg);
     Arg *arg;
 } Key;
 
@@ -253,6 +254,7 @@ void clamp_float_geometry(Window *w, Output *mon);
 void run_autostart(void);
 
 void destroy_window(Seat *seat, Arg *arg);
+void togglebar(Seat *seat, Arg *arg);
 void select_next_mon(Seat *seat, Arg *arg);
 void select_prev_mon(Seat *seat, Arg *arg);
 void movemon(Seat *seat, Arg *arg);
@@ -309,6 +311,9 @@ void render_seat(Seat *seat);
 // bindings.c - xkb key bindings + pointer button bindings
 // ---------------------------------------------------------------------
 void xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, void (*func)(Seat *seat, Arg *arg), Arg *arg);
+void xkb_hold_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym,
+                             void (*press_func)(Seat *seat, Arg *arg),
+                             void (*release_func)(Seat *seat, Arg *arg), Arg *arg);
 void xkb_binding_destroy(Key *key);
 void pointer_binding_create(Seat *seat, uint32_t modifiers, uint32_t ibutton, void (*func)(Seat *seat, Arg *arg), Arg *arg);
 void pointer_binding_destroy(Button *button);
@@ -342,6 +347,9 @@ void bar_output_ready(Output *output);
 void bar_manager_ready(void);
 void bar_redraw_all(void);
 void bar_destroy(Output *output);
+void bar_set_visible(bool visible);
+void bar_toggle(void);
+void bar_setup_seat_autohide(Seat *seat);
 int bar_status_fd(void);
 void bar_status_readable(void);
 void bar_kill_status(void);

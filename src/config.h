@@ -32,6 +32,11 @@ static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highli
  * schedule, e.g. via a signal to your own script). NULL to disable. */
 static const char *bar_status_cmd = "stat-sway";
 
+/* show the bar only while the Super key is held, hiding (and reclaiming
+ * its screen space) on release. When false, use the togglebar keybind
+ * below instead for a manual, persistent toggle. */
+static const bool bar_autohide = true;
+
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";
 static const char *xkb_options = "grp:sclk_toggle";
@@ -130,6 +135,7 @@ static Keys keybinds[] = {
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
     {SUPER|CONTROL, XKB_KEY_q,      restart_axe,     {0} },
+    {SUPER|ALT,     XKB_KEY_b,      togglebar,       {0} },
 
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
     // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },

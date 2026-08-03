@@ -29,6 +29,8 @@ static int baseline_y;
 
 static char cmd_output[256] = "";
 
+static bool bar_visible = true;
+static Arg bar_hold_arg = {0}; // shared, inert - persists for program lifetime, unlike a stack Arg
 static int status_fd = -1;
 static pid_t status_pid = -1;
 static char status_line_buf[512];
@@ -170,6 +172,7 @@ static void load_face(const char *font_name, int pixel_size, FT_Face *out_face) 
 }
 
 void bar_init(void) {
+    bar_visible = !bar_autohide;
     if(FT_Init_FreeType(&ft_library) != 0) {
         fprintf(stderr, "bar: FT_Init_FreeType failed - bar will show without text\n");
         return;
@@ -339,7 +342,7 @@ static void redraw(Output *o) {
         anchor |= bar_at_bottom ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
         zwlr_layer_surface_v1_set_anchor(o->bar_layer_surface, anchor);
         zwlr_layer_surface_v1_set_size(o->bar_layer_surface, 0, bar_height); // 0 width = "fill anchored edges"
-        zwlr_layer_surface_v1_set_exclusive_zone(o->bar_layer_surface, bar_height);
+        zwlr_layer_surface_v1_set_exclusive_zone(o->bar_layer_surface, bar_autohide ? 0 : (bar_visible ? bar_height : 0));
 
         // No interactivity implemented (no tag-click, no keyboard) - pass
         // everything through to whatever's underneath.
@@ -351,8 +354,8 @@ static void redraw(Output *o) {
         return;
     }
 
-    // if(o->bar_configured_w <= 0) return; // no configure yet
     if(o->bar_configured_w <= 0 || o->bar_configured_h <= 0) return; // no configure yet
+    if(!bar_visible) return;
 
     int w = o->bar_configured_w;
     int h = o->bar_configured_h;
@@ -450,6 +453,52 @@ const struct zwlr_layer_surface_v1_listener bar_layer_surface_listener = {
     .closed = layer_surface_closed,
 };
 
+// A fully transparent buffer of the surface's already-acked size,
+// committed the ordinary way (no null-attach, no unmap) - this is
+// "hidden" now, deliberately, instead of detaching the buffer. Once
+// a layer surface has been through its initial configure/ack
+// handshake, attaching NULL almost certainly puts it back into that
+// same unconfigured state on River, requiring a *fresh* configure
+// before a real buffer can be attached again - and nothing obligates
+// the compositor to send one just because we voluntarily unmapped.
+// Attaching a buffer without waiting for that is a protocol
+// violation, which is exactly what killed the connection last time.
+// Staying mapped the entire time and only ever swapping buffer
+// *content* sidesteps that whole class of problem.
+static void draw_blank(Output *o) {
+    int w = o->bar_configured_w, h = o->bar_configured_h;
+    if(w <= 0 || h <= 0) return;
+
+    int stride = w * 4;
+    int size = stride * h;
+    int fd = memfd_create("axe-bar-blank", MFD_CLOEXEC);
+    if(fd == -1 || ftruncate(fd, size) < 0) {
+        fprintf(stderr, "bar: failed to create shm fd (blank)\n");
+        if(fd != -1) close(fd);
+        return;
+    }
+    uint8_t *buf = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(buf == MAP_FAILED) {
+        fprintf(stderr, "bar: mmap failed (blank)\n");
+        close(fd);
+        return;
+    }
+    memset(buf, 0, size); // all-zero = fully transparent (premultiplied alpha 0)
+    munmap(buf, size);
+
+    if(o->bar_buffer != NULL) wl_buffer_destroy(o->bar_buffer);
+    struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
+    o->bar_buffer = wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+    o->bar_buf_w = -1; // force a real redraw the next time we're shown, regardless of cached state
+    o->bar_buf_h = h;
+
+    wl_surface_attach(o->bar_surface, o->bar_buffer, 0, 0);
+    wl_surface_damage_buffer(o->bar_surface, 0, 0, w, h);
+    wl_surface_commit(o->bar_surface);
+}
+
 void bar_output_ready(Output *o) { redraw(o); }
 
 void bar_manager_ready(void) {
@@ -472,4 +521,41 @@ void bar_destroy(Output *o) {
     o->bar_buffer = NULL;
     o->bar_configured_w = 0;
     o->bar_configured_h = 0;
+}
+
+void bar_set_visible(bool visible) {
+    if(bar_visible == visible) return;
+    bar_visible = visible;
+
+    Output *o;
+    wl_list_for_each(o, &axe.outputs, link) {
+        if(o->bar_layer_surface == NULL) continue;
+        if(o->bar_configured_w <= 0 || o->bar_configured_h <= 0) continue; // no configure yet - nothing to (re)draw
+
+        if(!visible) {
+            if(!bar_autohide) zwlr_layer_surface_v1_set_exclusive_zone(o->bar_layer_surface, 0);
+            draw_blank(o);
+        } else {
+            if(!bar_autohide) zwlr_layer_surface_v1_set_exclusive_zone(o->bar_layer_surface, bar_height);
+            o->bar_buf_w = -1;
+            redraw(o);
+        }
+    }
+}
+
+void bar_toggle(void) {
+    bar_set_visible(!bar_visible);
+}
+
+static void bar_show_on_press(Seat *seat, Arg *arg) {
+    bar_set_visible(true);
+}
+static void bar_hide_on_release(Seat *seat, Arg *arg) {
+    bar_set_visible(false);
+}
+
+void bar_setup_seat_autohide(Seat *seat) {
+    if(!bar_autohide) return;
+    xkb_hold_binding_create(seat, 0, XKB_KEY_Super_L, bar_show_on_press, bar_hide_on_release, &bar_hold_arg);
+    xkb_hold_binding_create(seat, 0, XKB_KEY_Super_R, bar_show_on_press, bar_hide_on_release, &bar_hold_arg);
 }
