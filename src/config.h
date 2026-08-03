@@ -21,7 +21,8 @@ static const uint8_t bordercolor_float[4]  = { 0xd8, 0xa8, 0x4c, 0xff };
 /* status bar */
 static const bool bar_at_bottom = true; /* false = top of screen, true = bottom */
 static const int bar_height = 18;
-static const char *bar_font_name = "Noto Sans";
+static const char *bar_font_name = "monospace";
+static const char *bar_emoji_font_name = "Noto Color Emoji";
 static const int bar_font_size = 16;
 static const uint8_t bar_bg_color[4]     = { 0x1a, 0x1b, 0x26, 0xff }; /* whole bar background */
 static const uint8_t bar_tag_fg_color[4] = { 0xd8, 0xde, 0xe9, 0xff }; /* occupied-tag text + status text */

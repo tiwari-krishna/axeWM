@@ -20,8 +20,11 @@
 #include "axe.h"
 #include "config.h" // bar_* settings
 
+#include <limits.h>
+
 static FT_Library ft_library;
 static FT_Face ft_face; // NULL if font load failed - drawing text becomes a no-op, bar still shows colored blocks
+static FT_Face ft_face_emoji; // NULL if unavailable/disabled - codepoints ft_face lacks fall back here
 static int baseline_y;
 
 static char cmd_output[256] = "";
@@ -121,15 +124,11 @@ void bar_kill_status(void) {
     }
 }
 
+static void load_face(const char *font_name, int pixel_size, FT_Face *out_face) {
+    *out_face = NULL;
+    if(font_name == NULL) return;
 
-void bar_init(void) {
-    if(FT_Init_FreeType(&ft_library) != 0) {
-        fprintf(stderr, "bar: FT_Init_FreeType failed - bar will show without text\n");
-        return;
-    }
-
-    FcInit();
-    FcPattern *pat = FcNameParse((const FcChar8 *) bar_font_name);
+    FcPattern *pat = FcNameParse((const FcChar8 *) font_name);
     FcConfigSubstitute(NULL, pat, FcMatchPattern);
     FcDefaultSubstitute(pat);
     FcResult result;
@@ -137,7 +136,7 @@ void bar_init(void) {
     FcPatternDestroy(pat);
 
     if(match == NULL) {
-        fprintf(stderr, "bar: fontconfig couldn't resolve '%s'\n", bar_font_name);
+        fprintf(stderr, "bar: fontconfig couldn't resolve '%s'\n", font_name);
         return;
     }
 
@@ -146,15 +145,45 @@ void bar_init(void) {
     FcPatternGetString(match, FC_FILE, 0, &file);
     FcPatternGetInteger(match, FC_INDEX, 0, &index);
 
-    if(file == NULL || FT_New_Face(ft_library, (const char *) file, index, &ft_face) != 0) {
-        fprintf(stderr, "bar: failed to load font file for '%s'\n", bar_font_name);
-        ft_face = NULL;
+    if(file == NULL || FT_New_Face(ft_library, (const char *) file, index, out_face) != 0) {
+        fprintf(stderr, "bar: failed to load font file for '%s'\n", font_name);
+        *out_face = NULL;
         FcPatternDestroy(match);
         return;
     }
     FcPatternDestroy(match);
 
-    FT_Set_Pixel_Sizes(ft_face, 0, bar_font_size);
+    if((*out_face)->num_fixed_sizes > 0) {
+        // Bitmap-strike font (Noto Color Emoji etc) - it has no scalable
+        // outline, so pick whichever fixed strike is closest to the
+        // requested size rather than FT_Set_Pixel_Sizes, which doesn't
+        // reliably select a sane strike on bitmap-only fonts.
+        int best = 0, best_diff = INT_MAX;
+        for(int i = 0; i < (*out_face)->num_fixed_sizes; i++) {
+            int diff = abs((*out_face)->available_sizes[i].height - pixel_size);
+            if(diff < best_diff) { best_diff = diff; best = i; }
+        }
+        FT_Select_Size(*out_face, best);
+    } else {
+        FT_Set_Pixel_Sizes(*out_face, 0, pixel_size);
+    }
+}
+
+void bar_init(void) {
+    if(FT_Init_FreeType(&ft_library) != 0) {
+        fprintf(stderr, "bar: FT_Init_FreeType failed - bar will show without text\n");
+        return;
+    }
+
+    FcInit();
+    load_face(bar_font_name, bar_font_size, &ft_face);
+    load_face(bar_emoji_font_name, bar_font_size, &ft_face_emoji);
+
+    if(ft_face == NULL) {
+        fprintf(stderr, "bar: primary font unavailable - bar will show without text\n");
+        return;
+    }
+
 
     int ascender = ft_face->size->metrics.ascender >> 6;
     int descender = ft_face->size->metrics.descender >> 6; // negative
@@ -164,12 +193,53 @@ void bar_init(void) {
     spawn_status();
 }
 
+// Decodes one UTF-8 codepoint at *p, advances *p past it. Returns 0 at
+// end of string; returns U+FFFD and advances by 1 byte on malformed
+// input, so a corrupt byte can't desync the whole rest of the string.
+static uint32_t utf8_next(const char **p) {
+    const unsigned char *s = (const unsigned char *) *p;
+    if(*s == 0) return 0;
+
+    uint32_t cp; int len;
+    if((*s & 0x80) == 0)         { cp = *s;        len = 1; }
+    else if((*s & 0xE0) == 0xC0) { cp = *s & 0x1F; len = 2; }
+    else if((*s & 0xF0) == 0xE0) { cp = *s & 0x0F; len = 3; }
+    else if((*s & 0xF8) == 0xF0) { cp = *s & 0x07; len = 4; }
+    else { *p += 1; return 0xFFFD; }
+
+    for(int i = 1; i < len; i++) {
+        if((s[i] & 0xC0) != 0x80) { *p += 1; return 0xFFFD; }
+        cp = (cp << 6) | (s[i] & 0x3F);
+    }
+    *p += len;
+    return cp;
+}
+
+static FT_Face face_for_codepoint(uint32_t cp) {
+    if(ft_face != NULL && FT_Get_Char_Index(ft_face, cp) != 0) return ft_face;
+    if(ft_face_emoji != NULL && FT_Get_Char_Index(ft_face_emoji, cp) != 0) return ft_face_emoji;
+    return NULL;
+}
+
 static int measure_text_width(const char *s) {
-    if(ft_face == NULL) return 0;
     int width = 0;
-    for(const unsigned char *p = (const unsigned char *) s; *p; p++) {
-        if(FT_Load_Char(ft_face, *p, FT_LOAD_DEFAULT) != 0) continue;
-        width += ft_face->glyph->advance.x >> 6;
+    uint32_t cp;
+    while((cp = utf8_next(&s)) != 0) {
+        FT_Face face = face_for_codepoint(cp);
+        if(face == NULL) continue;
+
+        bool is_emoji = (face == ft_face_emoji);
+        if(FT_Load_Char(face, cp, is_emoji ? (FT_LOAD_RENDER | FT_LOAD_COLOR) : FT_LOAD_RENDER) != 0) continue;
+
+        if(is_emoji && face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+            // Mirror draw_text's scale-to-line-height math exactly, or
+            // measured width won't match what actually gets drawn.
+            int target_h = bar_height - 2;
+            float scale = (float) target_h / (float) face->glyph->bitmap.rows;
+            width += (int) (face->glyph->bitmap.width * scale);
+        } else {
+            width += face->glyph->advance.x >> 6;
+        }
     }
     return width;
 }
@@ -184,20 +254,59 @@ static void blend_pixel(uint8_t *buf, int w, int h, int x, int y, const uint8_t 
     p[3] = 255;
 }
 
+// Composites a premultiplied-BGRA source pixel (FreeType's convention for
+// FT_PIXEL_MODE_BGRA glyphs - each byte already scaled by that pixel's own
+// alpha) onto an opaque destination.
+static void blend_pixel_bgra(uint8_t *buf, int w, int h, int x, int y, const uint8_t *src) {
+    if(x < 0 || x >= w || y < 0 || y >= h) return;
+    int alpha = src[3];
+    if(alpha == 0) return;
+    uint8_t *p = buf + (y * w + x) * 4;
+    int inv = 255 - alpha;
+    p[0] = src[0] + (p[0] * inv) / 255;
+    p[1] = src[1] + (p[1] * inv) / 255;
+    p[2] = src[2] + (p[2] * inv) / 255;
+    p[3] = 255;
+}
+
+
 static void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]) {
-    if(ft_face == NULL) return;
     int pen_x = x;
-    for(const unsigned char *p = (const unsigned char *) s; *p; p++) {
-        if(FT_Load_Char(ft_face, *p, FT_LOAD_RENDER) != 0) continue;
-        FT_GlyphSlot g = ft_face->glyph;
-        int gx = pen_x + g->bitmap_left;
-        int gy = baseline_y - g->bitmap_top;
-        for(unsigned int row = 0; row < g->bitmap.rows; row++) {
-            for(unsigned int col = 0; col < g->bitmap.width; col++) {
-                blend_pixel(buf, w, h, gx + (int) col, gy + (int) row, color, g->bitmap.buffer[row * g->bitmap.pitch + col]);
+    uint32_t cp;
+    while((cp = utf8_next(&s)) != 0) {
+        FT_Face face = face_for_codepoint(cp);
+        if(face == NULL) continue;
+
+        bool is_emoji = (face == ft_face_emoji);
+        if(FT_Load_Char(face, cp, is_emoji ? (FT_LOAD_RENDER | FT_LOAD_COLOR) : FT_LOAD_RENDER) != 0) continue;
+        FT_GlyphSlot g = face->glyph;
+
+        if(is_emoji && g->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
+            int target_h = h - 2;
+            float scale = (float) target_h / (float) g->bitmap.rows;
+            int dst_w = (int) (g->bitmap.width * scale);
+            int gy_top = (h - target_h) / 2;
+
+            for(int dy = 0; dy < target_h; dy++) {
+                int sy = (int) (dy / scale);
+                if(sy >= (int) g->bitmap.rows) sy = g->bitmap.rows - 1;
+                for(int dx = 0; dx < dst_w; dx++) {
+                    int sx = (int) (dx / scale);
+                    if(sx >= (int) g->bitmap.width) sx = g->bitmap.width - 1;
+                    blend_pixel_bgra(buf, w, h, pen_x + dx, gy_top + dy, g->bitmap.buffer + sy * g->bitmap.pitch + sx * 4);
+                }
             }
+            pen_x += dst_w;
+        } else {
+            int gx = pen_x + g->bitmap_left;
+            int gy = baseline_y - g->bitmap_top;
+            for(unsigned int row = 0; row < g->bitmap.rows; row++) {
+                for(unsigned int col = 0; col < g->bitmap.width; col++) {
+                    blend_pixel(buf, w, h, gx + (int) col, gy + (int) row, color, g->bitmap.buffer[row * g->bitmap.pitch + col]);
+                }
+            }
+            pen_x += g->advance.x >> 6;
         }
-        pen_x += g->advance.x >> 6;
     }
 }
 
