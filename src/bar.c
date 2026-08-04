@@ -364,18 +364,22 @@ static void redraw(Output *o) {
     int h = o->bar_configured_h;
 
     uint32_t occupied = 0;
+    uint32_t urgent = 0;
     Window *win;
     wl_list_for_each(win, &axe.windows, link) {
-        if(win->mon == o) occupied |= win->tagmask;
+        if(win->mon != o) continue;
+        occupied |= win->tagmask;
+        if(win->urgent) urgent |= win->tagmask;
     }
 
     // Skip the redraw entirely if nothing that would change the pixels
     // has actually changed - bar_redraw_all() gets called on every
     // manage_start, including mid-drag frames.
-    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag && o->bar_last_status_epoch == status_epoch) {
+    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_urgent == urgent && o->bar_last_seltag == o->seltag && o->bar_last_status_epoch == status_epoch) {
         return;
     }
     o->bar_last_occupied = occupied;
+    o->bar_last_urgent = urgent;
     o->bar_last_seltag = o->seltag;
     o->bar_last_status_epoch = status_epoch;
 
@@ -401,8 +405,10 @@ static void redraw(Output *o) {
     for(int t = 0; t < 9; t++) {
         bool sel = (o->seltag & (1u << t)) != 0;
         bool occ = (occupied & (1u << t)) != 0;
+        bool urg = (urgent & (1u << t)) != 0;
         if(!sel && !occ) continue;
-        if(sel) fill_rect(buf, w, h, x, 0, x + cellw, h, bar_sel_bg_color);
+        if(urg) fill_rect(buf, w, h, x, 0, x + cellw, h, bar_urgent_bg_color);
+        else if(sel) fill_rect(buf, w, h, x, 0, x + cellw, h, bar_sel_bg_color);
 
         char label[2] = { (char) ('1' + t), '\0' };
         int tw = measure_text_width(label);

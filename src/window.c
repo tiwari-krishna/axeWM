@@ -44,12 +44,12 @@ Output *output_by_index(int idx) {
 // an earlier, more specific rule match) - rule-based default size only
 // ever fills in a *blank* geometry, same spirit as float_default_geometry().
 static void apply_rule_float_geometry(Window *window, float width_frac, float height_frac) {
-    if(width_frac <= 0 && height_frac <= 0) return;
+    if(width_frac <= 0 || height_frac <= 0) return;
     if(window->floatw != 0 || window->floath != 0) return;
     if(window->mon->nex_w <= 0 || window->mon->nex_h <= 0) return;
 
-    window->floatw = width_frac > 0 ? (int)(window->mon->nex_w * width_frac) : window->mon->nex_w / 2;
-    window->floath = height_frac > 0 ? (int)(window->mon->nex_h * height_frac) : window->mon->nex_h / 2;
+    window->floatw = (int)(window->mon->nex_w * width_frac);
+    window->floath = (int)(window->mon->nex_h * height_frac);
     if(window->floatw < 1) window->floatw = 1;
     if(window->floath < 1) window->floath = 1;
 
@@ -85,14 +85,19 @@ void apply_rules(Window *window) {
 
         if(rules[i].floating == 1) {
             window->floating = true;
+            window->floating_explicit = true;
             apply_rule_float_geometry(window, rules[i].float_width, rules[i].float_height);
             float_default_geometry(window);
         } else if(rules[i].floating == 0) {
             window->floating = false;
+            window->floating_explicit = true;
         }
 
         if(rules[i].tag >= 0) {
             window->tagmask = 1u << rules[i].tag;
+            if((window->tagmask & window->mon->tagmask) == 0) {
+                window->urgent = true;
+            }
         }
 
         return;
@@ -253,7 +258,7 @@ void river_window_v1_title(void *data, struct river_window_v1 *obj, const char *
 void river_window_v1_parent(void *data, struct river_window_v1 *obj, struct river_window_v1 *parent) {
     Window *window = data;
 
-    if(parent != NULL && !window->floating) {
+    if(parent != NULL && !window->floating && !window->floating_explicit) {
         window->floating = true;
         float_default_geometry(window);
     }

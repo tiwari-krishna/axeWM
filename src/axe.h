@@ -53,6 +53,10 @@ struct Window {
     bool floating;
     bool fullscreen;
     bool sticky;
+
+    bool floating_explicit;
+
+    bool urgent;
     int floatx;
     int floaty;
     int floatw;
@@ -104,6 +108,7 @@ struct Output {
     int bar_buf_w;
     int bar_buf_h;
     uint32_t bar_last_occupied; // cached, to skip redundant redraws
+    uint32_t bar_last_urgent;
     uint32_t bar_last_seltag;
     uint32_t bar_last_status_epoch;
 };

@@ -50,7 +50,7 @@ Window *adjacent_tiled(Window *w, int dir) {
         if(node == &w->link) return NULL;
 
         Window *cand = wl_container_of(node, cand, link);
-        if(cand->mon == w->mon && !cand->floating && ISVISIBLE(cand)) return cand;
+        if(cand->mon == w->mon && !cand->floating && !cand->sticky && ISVISIBLE(cand)) return cand;
     }
 }
 
@@ -85,7 +85,10 @@ void set_focus(Seat *seat, Window *window) {
 
     if(seat->focused != NULL) seat->focused->focused = false;
     seat->focused = window;
-    if(window != NULL) window->focused = true;
+    if(window != NULL) {
+        window->focused = true;
+        window->urgent = false;
+    }
 }
 
 // Give a window a default centered floating geometry, if it doesn't
@@ -271,7 +274,7 @@ void toggletag(Seat *seat, Arg *arg) {
 // neighbor (arg->i == +1 for next, -1 for prev). Floating windows don't
 // participate in tiling order and are ignored.
 void movestack(Seat *seat, Arg *arg) {
-    if(seat->focused == NULL || seat->focused->floating) return;
+    if(seat->focused == NULL || seat->focused->floating || seat->focused->sticky) return;
 
     Window *other = adjacent_tiled(seat->focused, arg->i);
     if(other == NULL) return;
@@ -285,12 +288,12 @@ void movestack(Seat *seat, Arg *arg) {
 // master, swap it with the next tiled window instead (classic dwm zoom).
 void zoom(Seat *seat, Arg *arg) {
     Window *w = seat->focused;
-    if(w == NULL || w->floating) return;
+    if(w == NULL || w->floating || w->sticky) return;
 
     Window *master = NULL;
     Window *iter;
     wl_list_for_each(iter, &axe.windows, link) {
-        if(iter->mon == w->mon && ISVISIBLE(iter) && !iter->floating) {
+        if(iter->mon == w->mon && ISVISIBLE(iter) && !iter->floating && !iter->sticky) {
             master = iter;
             break;
         }
@@ -331,22 +334,22 @@ void togglefullscreen(Seat *seat, Arg *arg) {
     river_window_manager_v1_manage_dirty(window_manager);
 }
 
-// Toggle "show on every tag, always on top" for the focused window -
-// independent of floating/tiled, and independent of a window rule, per
-// your ask. Works on a tiled window too: it keeps window->floating as-is,
-// so turning sticky back off drops it right back into tiling rather than
-// leaving it floating.
+// Toggle "show on every tag, always on top" for the focused window.
+// Tiled+sticky doesn't make sense (a sticky window ignores tags/tiling
+// entirely, so a "tiled slot" for it is meaningless) - stickying always
+// forces the window floating too. Un-stickying deliberately leaves it
+// floating: no auto-revert to tiled. If you want it back in the tiling,
+// toggle floating explicitly with togglefloating.
 void togglesticky(Seat *seat, Arg *arg) {
     if(seat->focused == NULL) return;
 
     Window *w = seat->focused;
-    if (!w->floating && !w->sticky)
-        w->floating = !w->floating;
     w->sticky = !w->sticky;
 
-    // Needs *some* geometry to be placed at if it was previously tiled
-    // and has never floated before (floatw/floath still 0 from calloc).
-    if(w->sticky) float_default_geometry(w);
+    if(w->sticky) {
+        w->floating = true;
+        float_default_geometry(w);
+    }
 
     river_window_manager_v1_manage_dirty(window_manager);
 }

@@ -27,6 +27,7 @@ static const int bar_font_size = 16;
 static const uint8_t bar_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xff }; /* whole bar background */
 static const uint8_t bar_tag_fg_color[4] = { 0xd8, 0xde, 0xe9, 0xff }; /* occupied-tag text + status text */
 static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highlight behind the current tag */
+static const uint8_t bar_urgent_bg_color[4] = { 0xb0, 0x3a, 0x2e, 0xff };
 /* spawned once at startup and left running; each newline it writes to
  * stdout becomes the new status text (no polling - update on your own
  * schedule, e.g. via a signal to your own script). NULL to disable. */
