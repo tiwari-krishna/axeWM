@@ -83,7 +83,7 @@ static const Rule rules[] = {
     { "pavucontrol",      true,    -1,  -1 },
     { "mpv",              true,    -1,  -1 },
     { "galculator",       true,    -1,  -1 },
-    { "pcmanfm",          true,    -1,  -1 },
+    { "xdg-desktop-portal-gtk",          true,    -1,  -1 },
     { "file_progress",    true,    -1,  -1 },
     { "float",            true,    -1,  -1 },
 };
