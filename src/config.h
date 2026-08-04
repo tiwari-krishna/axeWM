@@ -33,7 +33,7 @@ static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highli
  * borderpx - they stack with it, not replace it. smart_gap: when true,
  * a lone tiled window on an output gets no gap (or border) at all,
  * same idea as the existing smart-border behavior. */
-static const bool smart_gap  = true;
+static const bool smart_gap  = false;
 static const int outer_gap   = 10;
 static const int inner_gap   = 5;
 
