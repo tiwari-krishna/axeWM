@@ -64,7 +64,31 @@ void river_output_v1_removed(void *data, struct river_output_v1 *obj) {
             // if(window->floaty < 0) window->floaty = 0;
             clamp_float_geometry(window, fallback);
         } else {
+            // FIX: this was the last output, so there's nowhere to rehome
+            // this window - but river_window_v1_close() only *requests*
+            // a close; the window sticks around (with a dangling ->mon
+            // pointing at the Output we're about to free() below) until
+            // the client's closed event actually arrives. Anything that
+            // dereferences ->mon in the meantime (ISVISIBLE, bar redraw,
+            // manage_seat's fallback focus search, ...) would read freed
+            // memory. NULL it out - ISVISIBLE() and friends treat a NULL
+            // mon as "not visible", which is exactly right for a window
+            // that no longer has anywhere to be shown.
+            window->mon = NULL;
             river_window_v1_close(window->river_window);
+
+            // No output left means no valid focus target either - drop
+            // any seat's reference to this window so nothing dereferences
+            // its (now NULL) ->mon before the close actually completes.
+            Seat *seat;
+            wl_list_for_each(seat, &axe.seats, link) {
+                if(seat->focused == window) seat->focused = NULL;
+                if(seat->hovered == window) seat->hovered = NULL;
+                if(seat->op_window == window) {
+                    seat->op_window = NULL;
+                    seat->op_ending = false;
+                }
+            }
         }
     }
 

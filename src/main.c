@@ -118,6 +118,7 @@ void wl_registry_global(void *data, struct wl_registry *registry, uint32_t name,
 
 void wl_registry_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
     fprintf(stderr, "warning: registry global %u removed unexpectedly\n", name);
+    idle_registry_global_remove(name);
 }
 
 const struct wl_registry_listener registry_listener = {

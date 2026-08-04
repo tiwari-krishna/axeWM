@@ -170,6 +170,36 @@ void idle_power_manager_ready(void) {
     }
 }
 
+// Called from main.c's wl_registry_global_remove. A wl_seat/wl_output
+// global can in principle disappear before river ever sends the matching
+// river_seat_v1.wl_seat / river_output_v1.wl_output event that would
+// claim it out of the pending list below - without this, that entry (and
+// the wl_seat/wl_output proxy it holds) would leak for the life of the
+// process. Already-claimed seats/outputs are unaffected: their wl_seat/
+// wl_output is torn down by idle_teardown_seat()/river_output_v1_removed()
+// via the normal river removal path, not here.
+void idle_registry_global_remove(uint32_t name) {
+    ensure_lists();
+
+    PendingSeat *ps, *ps_tmp;
+    wl_list_for_each_safe(ps, ps_tmp, &pending_seats, link) {
+        if(ps->name != name) continue;
+        wl_seat_destroy(ps->wl_seat);
+        wl_list_remove(&ps->link);
+        free(ps);
+        return;
+    }
+
+    PendingOutput *po, *po_tmp;
+    wl_list_for_each_safe(po, po_tmp, &pending_outputs, link) {
+        if(po->name != name) continue;
+        wl_output_destroy(po->wl_output);
+        wl_list_remove(&po->link);
+        free(po);
+        return;
+    }
+}
+
 void idle_teardown_seat(Seat *seat) {
     if(seat->idle_setup_done) {
         IdleWatcher *w, *w_tmp;

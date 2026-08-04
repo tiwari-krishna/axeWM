@@ -21,10 +21,10 @@
 #include <wlr-output-power-management-unstable-v1-client-protocol.h>
 #include <wlr-layer-shell-unstable-v1-client-protocol.h>
 
-#define MIN(A, B) (A < B ? A : B)
-#define MAX(A, B) (A > B ? A : B)
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
+#define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define LENGTH(A) (sizeof A / sizeof A[0])
-#define ISVISIBLE(C) (C->tagmask & C->mon->tagmask)
+#define ISVISIBLE(C) ((C) != NULL && (C)->mon != NULL && ((C)->tagmask & (C)->mon->tagmask))
 #define CLAMP(VAL, MIN, MAX) VAL = VAL < MIN ? MIN : (VAL > MAX ? MAX : VAL)
 
 typedef struct Window Window;
@@ -338,6 +338,7 @@ void idle_attach_wl_seat(Seat *seat, uint32_t name);
 void idle_attach_wl_output(Output *output, uint32_t name);
 void idle_notifier_ready(void);
 void idle_power_manager_ready(void);
+void idle_registry_global_remove(uint32_t name);
 
 // ---------------------------------------------------------------------
 // bar.c - status bar (tags + one-shot status command) via wlr-layer-shell

@@ -107,6 +107,8 @@ void apply_saved_output_state(Output *output) {
         output->mfact = o->mfact;
         output->seltag = o->seltag;
         output->tagmask = o->tagmask;
+        wl_list_remove(&o->link);
+        free(o);
         return;
     }
 }
@@ -129,6 +131,11 @@ void apply_saved_window_state(Window *window) {
         Output *mon = output_by_index(w->mon_index);
         if(mon != NULL) window->mon = mon;
 
+        // Consumed - drop it rather than holding it for the rest of the
+        // process's life (and so a duplicate identifier can't reapply it
+        // to a second window later).
+        wl_list_remove(&w->link);
+        free(w);
         return;
     }
 }
