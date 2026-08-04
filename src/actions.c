@@ -87,7 +87,6 @@ void set_focus(Seat *seat, Window *window) {
     seat->focused = window;
     if(window != NULL) {
         window->focused = true;
-        window->urgent = false;
     }
 }
 

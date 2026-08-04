@@ -43,16 +43,29 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
         int n = count_tiled_windows(output);
         int m = output->nmaster;
 
+        bool solo = n <= 1;
+        int og = (smart_gap && solo) ? 0 : outer_gap;
+        int ig = (smart_gap && solo) ? 0 : inner_gap;
+
+        // Shrink the usable area by outer_gap on every side before any
+        // column math runs, so "gap to the screen edge" is exact
+        // regardless of how many windows or columns there are.
+        int area_w = MAX(output->nex_w - 2 * og, 1);
+        int area_h = MAX(output->nex_h - 2 * og, 1);
+
         // Window *prev = NULL;
         bool two = m < n && m != 0;
         float mfact = two ? output->mfact : 1;
-        int master_w = output->nex_w * mfact;
+        int master_w = (m == 0) ? 0 : (int) (area_w * mfact);
 
-        // No border to draw at all when there's only one tiled window on
-        // this monitor (see render_window()'s matching smart-border
-        // check) - so give it the full usable area instead of leaving an
-        // invisible gap where the border would have been.
-        int tile_inset = n <= 1 ? 0 : (int) borderpx;
+        int tile_inset = solo ? 0 : (int) borderpx;
+        // Half of inner_gap on every side of every tile: between two
+        // adjacent tiles that sums to exactly inner_gap; against the
+        // outer boundary it stacks with outer_gap (standard gaps
+        // behavior - lower outer_gap if you don't want the doubled-up
+        // look at the screen edge).
+        int gap_inset = ig / 2;
+        int inset = tile_inset + gap_inset;
 
         int prev_slot_bottom = 0;
         wl_list_for_each(window, &axe.windows, link) {
@@ -94,39 +107,12 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
             int si = i < m ? i : i - m;
             int div = two ? (i < m ? m : n - m) : n;
 
-            // // Split the column's height evenly, handing the remainder pixels
-            // // to the first `rem` windows so the column always sums exactly to
-            // // the usable area's height (no gaps, no overlap).
-            // int height = output->nex_h / div + (si < output->nex_h % div ? 1 : 0);
-            //
-            // float mfact = two ? output->mfact : 1;
-            //
-            // window_set_position(window, 0, 0);
-            // window_set_dimensions(window, output->nex_w*mfact, height);
-            //
-            // if(two && i >= m) {
-            //     window_set_position(window, window->width, 0);
-            //     window_set_dimensions(window, output->nex_w - (window->width), window->height);
-            // }
-            //
-            // if(si != 0) {
-            //     window_set_position(window, window->x - window->mon->nex_x, prev->y + prev->height - window->mon->nex_y);
-            // }
-            //
-            // prev = window;
-            // Split the column's height evenly, handing the remainder pixels
-            // to the first `rem` windows so the column always sums exactly to
-            // the usable area's height (no gaps, no overlap).
-            int slot_h = output->nex_h / div + (si < output->nex_h % div ? 1 : 0);
 
-            // Raw, un-inset slot geometry - this is what tiling chains off
-            // of (prev_slot_bottom), kept separate from what's actually
-            // proposed to the compositor below so border-inset doesn't
-            // throw off the next window's position.
-            int slot_x = (i < m) ? 0 : master_w;
-            int slot_w = (i < m) ? master_w : output->nex_w - master_w;
-            int slot_y = (si == 0) ? 0 : prev_slot_bottom;
-            prev_slot_bottom = slot_y + slot_h;
+            int slot_h = area_h / div + (si < area_h % div ? 1 : 0);
+            int slot_x = og + ((i < m) ? 0 : master_w);
+            int slot_w = (i < m) ? master_w : area_w - master_w;
+            int slot_y = og + ((si == 0) ? 0 : prev_slot_bottom);
+            prev_slot_bottom = (slot_y - og) + slot_h;
 
             // river_window_v1.dimensions is content size only, unaffected
             // by borders (see protocol) - borders are drawn *outside* it.
@@ -134,8 +120,8 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
             // where it would be, on a solo window) stays inside this
             // slot instead of bleeding past the output edge or a
             // neighboring tile.
-            window_set_position(window, slot_x + tile_inset, slot_y + tile_inset);
-            window_set_dimensions(window, MAX(slot_w - 2*tile_inset, 1), MAX(slot_h - 2*tile_inset, 1));
+            window_set_position(window, slot_x + inset, slot_y + inset);
+            window_set_dimensions(window, MAX(slot_w - 2*inset, 1), MAX(slot_h - 2*inset, 1));
 
             i++;
         }

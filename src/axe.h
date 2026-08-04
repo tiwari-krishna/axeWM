@@ -56,7 +56,6 @@ struct Window {
 
     bool floating_explicit;
 
-    bool urgent;
     int floatx;
     int floaty;
     int floatw;
@@ -108,7 +107,6 @@ struct Output {
     int bar_buf_w;
     int bar_buf_h;
     uint32_t bar_last_occupied; // cached, to skip redundant redraws
-    uint32_t bar_last_urgent;
     uint32_t bar_last_seltag;
     uint32_t bar_last_status_epoch;
 };
@@ -193,8 +191,12 @@ typedef struct {
     Arg arg;
 } Mousebinds;
 
-// A simple window rule matched by app_id. -1 for tag/monitor means "leave
-// unchanged".
+// A window rule matched by app_id (exact) and/or title (POSIX extended
+// regex, case-insensitive) - either may be NULL to mean "don't care".
+// floating is tri-state: -1 = unchanged, 0 = force tiled, 1 = force
+// floating. tag/monitor: -1 = unchanged. float_width/float_height, if
+// > 0, are fractions (0.0-1.0] of the monitor's usable area used as the
+// window's default floating size the first time it floats.
 typedef struct {
     const char *app_id;
     const char *title;

@@ -95,9 +95,6 @@ void apply_rules(Window *window) {
 
         if(rules[i].tag >= 0) {
             window->tagmask = 1u << rules[i].tag;
-            if((window->tagmask & window->mon->tagmask) == 0) {
-                window->urgent = true;
-            }
         }
 
         return;
@@ -129,10 +126,6 @@ void window_set_dimensions(Window *window, int width, int height) {
 
 void render_window(Window *window) {
     if(window->floating || window->sticky) {
-        // Floating (and sticky - see manage_start()) windows always sit
-        // above tiling and get their own fixed border color, independent
-        // of focus - so they stay visually distinct from tiled windows
-        // without a color flicker every time focus moves.
         river_window_v1_set_borders(window->river_window,
                                     RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
                                     RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT,
@@ -141,9 +134,6 @@ void render_window(Window *window) {
         return;
     }
 
-    // Smart borders: nothing to visually separate a lone tiled window
-    // from, so skip the border entirely when it's the only one visible
-    // on its monitor.
     if(count_tiled_windows(window->mon) <= 1) {
         river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
         return;
