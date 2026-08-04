@@ -5,6 +5,29 @@
 #include "axe.h"
 #include "config.h"
 
+// Compiled title regexes, parallel to config.h's rules[] array. Compiled
+// once at startup (rules_init(), called from main()) rather than per
+// event - regcomp isn't cheap and app_id/title can each fire more than
+// once per window.
+static regex_t title_regex[LENGTH(rules)];
+static bool title_regex_ok[LENGTH(rules)];
+
+void rules_init(void) {
+    for(size_t i = 0; i < LENGTH(rules); i++) {
+        if(rules[i].title == NULL) continue;
+
+        int err = regcomp(&title_regex[i], rules[i].title, REG_EXTENDED | REG_NOSUB | REG_ICASE);
+        if(err != 0) {
+            char errbuf[256];
+            regerror(err, &title_regex[i], errbuf, sizeof(errbuf));
+            fprintf(stderr, "warning: rule[%zu] bad title regex '%s': %s (rule will never match)\n",
+                    i, rules[i].title, errbuf);
+            continue;
+        }
+        title_regex_ok[i] = true;
+    }
+}
+
 Output *output_by_index(int idx) {
     int i = 0;
     Output *o;
@@ -15,20 +38,57 @@ Output *output_by_index(int idx) {
     return NULL;
 }
 
-void apply_rules(Window *window, const char *app_id) {
-    if(app_id == NULL) return;
+// Sets floatw/floath/floatx/floaty from a rule's requested fraction of
+// the monitor's usable area, centered. No-op if the window already has
+// a remembered float geometry (e.g. restored via restart.c, or set by
+// an earlier, more specific rule match) - rule-based default size only
+// ever fills in a *blank* geometry, same spirit as float_default_geometry().
+static void apply_rule_float_geometry(Window *window, float width_frac, float height_frac) {
+    if(width_frac <= 0 && height_frac <= 0) return;
+    if(window->floatw != 0 || window->floath != 0) return;
+    if(window->mon->nex_w <= 0 || window->mon->nex_h <= 0) return;
 
+    window->floatw = width_frac > 0 ? (int)(window->mon->nex_w * width_frac) : window->mon->nex_w / 2;
+    window->floath = height_frac > 0 ? (int)(window->mon->nex_h * height_frac) : window->mon->nex_h / 2;
+    if(window->floatw < 1) window->floatw = 1;
+    if(window->floath < 1) window->floath = 1;
+
+    window->floatx = (window->mon->nex_w - window->floatw) / 2;
+    window->floaty = (window->mon->nex_h - window->floath) / 2;
+}
+
+// Re-evaluated from scratch every time window->app_id or window->title
+// changes (see river_window_v1_app_id/title below), not just once. A
+// rule whose app_id/title we don't know yet is skipped rather than
+// treated as a mismatch, so as more identifying info arrives (app_id
+// usually first, title sometimes later - or the reverse for some
+// clients) the result self-corrects instead of locking in a premature
+// decision. Put more specific rules earlier in rules[]; first full
+// match wins.
+void apply_rules(Window *window) {
     for(size_t i = 0; i < LENGTH(rules); i++) {
-        if(strcmp(rules[i].app_id, app_id) != 0) continue;
+        if(rules[i].app_id != NULL) {
+            if(window->app_id[0] == '\0') continue; // not known yet
+            if(strcmp(rules[i].app_id, window->app_id) != 0) continue;
+        }
+
+        if(rules[i].title != NULL) {
+            if(window->title[0] == '\0') continue; // not known yet
+            if(!title_regex_ok[i]) continue;        // bad pattern, never matches
+            if(regexec(&title_regex[i], window->title, 0, NULL, 0) != 0) continue;
+        }
 
         if(rules[i].monitor >= 0) {
             Output *o = output_by_index(rules[i].monitor);
             if(o != NULL) window->mon = o;
         }
 
-        if(rules[i].floating) {
+        if(rules[i].floating == 1) {
             window->floating = true;
+            apply_rule_float_geometry(window, rules[i].float_width, rules[i].float_height);
             float_default_geometry(window);
+        } else if(rules[i].floating == 0) {
+            window->floating = false;
         }
 
         if(rules[i].tag >= 0) {
@@ -63,11 +123,11 @@ void window_set_dimensions(Window *window, int width, int height) {
 #define CHAN32(c) ((uint32_t)(c) * 0x01010101u)
 
 void render_window(Window *window) {
-    if(window->floating) {
-        // Floating windows always sit above tiling (manage_start()/
-        // manage_seat()) and get their own fixed border color,
-        // independent of focus - so they stay visually distinct from
-        // tiled windows without a color flicker every time focus moves.
+    if(window->floating || window->sticky) {
+        // Floating (and sticky - see manage_start()) windows always sit
+        // above tiling and get their own fixed border color, independent
+        // of focus - so they stay visually distinct from tiled windows
+        // without a color flicker every time focus moves.
         river_window_v1_set_borders(window->river_window,
                                     RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
                                     RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT,
@@ -173,9 +233,23 @@ void river_window_v1_dimensions(void *data, struct river_window_v1 *obj, int32_t
 
 void river_window_v1_app_id(void *data, struct river_window_v1 *obj, const char *app_id) {
     Window *window = data;
-    apply_rules(window, app_id);
+    if(app_id != NULL) {
+        strncpy(window->app_id, app_id, sizeof(window->app_id) - 1);
+        window->app_id[sizeof(window->app_id) - 1] = '\0';
+    }
+    apply_rules(window);
 }
-void river_window_v1_title(void *data, struct river_window_v1 *obj, const char *title) {}
+
+void river_window_v1_title(void *data, struct river_window_v1 *obj, const char *title) {
+    Window *window = data;
+    if(title != NULL) {
+        strncpy(window->title, title, sizeof(window->title) - 1);
+        window->title[sizeof(window->title) - 1] = '\0';
+    }
+    apply_rules(window);
+}
+
+// void river_window_v1_title(void *data, struct river_window_v1 *obj, const char *title) {}
 void river_window_v1_parent(void *data, struct river_window_v1 *obj, struct river_window_v1 *parent) {
     Window *window = data;
 

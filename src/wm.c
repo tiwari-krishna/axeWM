@@ -21,7 +21,7 @@ int count_tiled_windows(Output *output) {
     int c = 0;
     Window *window;
     wl_list_for_each(window, &axe.windows, link) {
-        if(window->mon == output && ISVISIBLE(window) && !window->floating) c++;
+        if(window->mon == output && ISVISIBLE(window) && !window->floating && !window->sticky) c++;
     }
 
     return c;
@@ -71,7 +71,13 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
             river_window_v1_exit_fullscreen(window->river_window);
             river_window_v1_inform_not_fullscreen(window->river_window);
 
-            if(window->floating) {
+            if(window->floating || window->sticky) {
+                // Sticky rides the same path as floating here: it uses
+                // its own remembered geometry and gets placed above the
+                // tiling, which is exactly "pin to top" - see
+                // togglesticky() in actions.c. It stays a distinct flag
+                // from `floating` itself so untoggling it returns the
+                // window to wherever it'd normally tile.
                 river_window_v1_set_tiled(window->river_window, RIVER_WINDOW_V1_EDGES_NONE);
                 window_set_position(window, window->floatx, window->floaty);
                 window_set_dimensions(window, window->floatw, window->floath);

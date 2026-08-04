@@ -76,16 +76,26 @@ static const char *autostart[][8] = {
     { NULL },
 };
 
-/* simple per-app_id window rules: floating, forced tag (-1 = unchanged),
- * forced monitor index (-1 = unchanged) */
+/* per-window rules, matched by app_id (exact) and/or title (POSIX
+ * extended regex, case-insensitive) - either may be NULL for "any".
+ * floating: -1 unchanged, 0 force tiled, 1 force floating.
+ * tag/monitor: -1 = unchanged.
+ * float_width/float_height: fraction (0.0-1.0] of the monitor's usable
+ * area to use as the default floating size instead of the client's own
+ * requested size - 0 to just use the client's size, as before. Only
+ * takes effect the first time the window floats (won't override a
+ * remembered/restored geometry). */
 static const Rule rules[] = {
-    /* app_id             floating  tag  monitor */
-    { "pavucontrol",      true,    -1,  -1 },
-    { "mpv",              true,    -1,  -1 },
-    { "galculator",       true,    -1,  -1 },
-    { "xdg-desktop-portal-gtk",          true,    -1,  -1 },
-    { "file_progress",    true,    -1,  -1 },
-    { "float",            true,    -1,  -1 },
+    /* app_id                     title regex          floating tag monitor float_w float_h */
+    { "xdg-desktop-portal-gtk",   NULL,                   1,    -1,  -1,     0,      0 },
+    { NULL,                       "^(Open|Save) File",    1,    -1,  -1,     0.5,    0.5 },
+    // { "pavucontrol",              NULL,                   1,    -1,  -1,     0,      0 },
+    { "mpv",                      NULL,                   1,    -1,  -1,     0,      0 },
+    // { "galculator",               NULL,                   1,    -1,  -1,     0,      0 },
+    { "galculator",               NULL,                   1,    -1,  -1,     0.4,    0.7 },
+    { "ncmpcpp",                  NULL,                   1,    -1,  -1,     0.75,   0.75 },
+    { "file_progress",            NULL,                   1,    -1,  -1,     0,      0 },
+    { "float",                    NULL,                   1,    -1,  -1,     0,      0 },
 };
 
 /* idle timeouts: after this many ms of seat inactivity, run `command`;
@@ -131,6 +141,7 @@ static Keys keybinds[] = {
     {SUPER|CONTROL, XKB_KEY_Return, zoom,            {0} },
     {SUPER,         XKB_KEY_f,  togglefloating,  {0} },
     {SUPER|SHIFT,   XKB_KEY_f,      togglefullscreen,{0} },
+    {SUPER,         XKB_KEY_0,      togglesticky,    {0} },
 
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
@@ -164,7 +175,7 @@ static Keys keybinds[] = {
     // { ALT,                XKB_KEY_c,              spawn,          SHCMD("galculator") },
 
     /* Music Player */
-    { SUPER|ALT,            XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -a=ncmpcpp -e ncmpcpp") },
+    { SUPER|ALT,            XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -a ncmpcpp -e ncmpcpp") },
 
     /* Screenshots */
     { CONTROL|SHIFT,        XKB_KEY_s,              spawn,          SHCMD("scrshot cpy") },

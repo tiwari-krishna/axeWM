@@ -331,6 +331,26 @@ void togglefullscreen(Seat *seat, Arg *arg) {
     river_window_manager_v1_manage_dirty(window_manager);
 }
 
+// Toggle "show on every tag, always on top" for the focused window -
+// independent of floating/tiled, and independent of a window rule, per
+// your ask. Works on a tiled window too: it keeps window->floating as-is,
+// so turning sticky back off drops it right back into tiling rather than
+// leaving it floating.
+void togglesticky(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+
+    Window *w = seat->focused;
+    if (!w->floating && !w->sticky)
+        w->floating = !w->floating;
+    w->sticky = !w->sticky;
+
+    // Needs *some* geometry to be placed at if it was previously tiled
+    // and has never floated before (floatw/floath still 0 from calloc).
+    if(w->sticky) float_default_geometry(w);
+
+    river_window_manager_v1_manage_dirty(window_manager);
+}
+
 // Start an interactive move of the hovered window via mouse drag. Only
 // affects floating windows, as asked - tiled windows don't drag.
 void movewin(Seat *seat, Arg *arg) {

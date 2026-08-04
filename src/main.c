@@ -148,6 +148,7 @@ int main(int argc, char **argv) {
     wl_list_init(&axe.outputs);
     wl_list_init(&axe.seats);
     wl_list_init(&axe.libinput_devices);
+    rules_init();
 
     struct wl_registry *registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);

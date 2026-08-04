@@ -21,10 +21,12 @@
 #include <wlr-output-power-management-unstable-v1-client-protocol.h>
 #include <wlr-layer-shell-unstable-v1-client-protocol.h>
 
+#include <regex.h>
+
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define LENGTH(A) (sizeof A / sizeof A[0])
-#define ISVISIBLE(C) ((C) != NULL && (C)->mon != NULL && ((C)->tagmask & (C)->mon->tagmask))
+#define ISVISIBLE(C) ((C) != NULL && (C)->mon != NULL && (((C)->tagmask & (C)->mon->tagmask) || (C)->sticky))
 #define CLAMP(VAL, MIN, MAX) VAL = VAL < MIN ? MIN : (VAL > MAX ? MAX : VAL)
 
 typedef struct Window Window;
@@ -36,6 +38,8 @@ struct Window {
     struct river_node_v1 *river_node;
     struct wl_list link;
     char identifier[33];
+    char app_id[128];
+    char title[256];
 
     int x;
     int y;
@@ -48,6 +52,7 @@ struct Window {
 
     bool floating;
     bool fullscreen;
+    bool sticky;
     int floatx;
     int floaty;
     int floatw;
@@ -187,9 +192,12 @@ typedef struct {
 // unchanged".
 typedef struct {
     const char *app_id;
-    bool floating;
+    const char *title;
+    int floating;
     int tag;
     int monitor;
+    float float_width;
+    float float_height;
 } Rule;
 
 // A single idle-timeout entry: run `command` once the seat has been
@@ -276,6 +284,7 @@ void togglefullscreen(Seat *seat, Arg *arg);
 
 void movewin(Seat *seat, Arg *arg);
 void resizewin(Seat *seat, Arg *arg);
+void togglesticky(Seat *seat, Arg *arg);
 
 // ---------------------------------------------------------------------
 // restart.c - self-exec restart with saved window/output state
@@ -292,7 +301,8 @@ void restart_axe(Seat *seat, Arg *arg);
 // window.c - river_window_v1 handling
 // ---------------------------------------------------------------------
 Output *output_by_index(int idx);
-void apply_rules(Window *window, const char *app_id);
+void rules_init(void);
+void apply_rules(Window *window);
 void window_set_position(Window *window, int x, int y);
 void window_set_dimensions(Window *window, int width, int height);
 void render_window(Window *window);
