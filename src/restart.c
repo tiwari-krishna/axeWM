@@ -104,7 +104,9 @@ void apply_saved_output_state(Output *output) {
     wl_list_for_each(o, &saved_outputs, link) {
         if(o->index != index) continue;
         output->nmaster = o->nmaster;
+        CLAMP(output->nmaster, 0, (1 << 16));
         output->mfact = o->mfact;
+        CLAMP(output->mfact, 0, 1);
         output->seltag = o->seltag;
         output->tagmask = o->tagmask;
         wl_list_remove(&o->link);
@@ -130,6 +132,8 @@ void apply_saved_window_state(Window *window) {
 
         Output *mon = output_by_index(w->mon_index);
         if(mon != NULL) window->mon = mon;
+
+        clamp_float_geometry(window, window->mon);
 
         // Consumed - drop it rather than holding it for the rest of the
         // process's life (and so a duplicate identifier can't reapply it

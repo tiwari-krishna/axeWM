@@ -49,7 +49,7 @@ static const bool bar_autohide = true;
 
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";
-static const char *xkb_options = "grp:sclk_toggle";
+static const char *xkb_options = "grp:shift_caps_toggle";
 /* static const char *xkb_options = "grp:sclk_toggle,caps:swapescape"; */
 static const bool numlock_default_on = true;
 
