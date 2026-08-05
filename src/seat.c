@@ -39,7 +39,7 @@ void river_seat_v1_pointer_enter(void *data, struct river_seat_v1 *obj, struct r
     window->hovered = true;
 
     // focus-follows-mouse
-    set_focus(seat, window);
+    // set_focus(seat, window);
 }
 
 void river_seat_v1_pointer_leave(void *data, struct river_seat_v1 *obj) {
@@ -93,6 +93,16 @@ void river_seat_v1_pointer_position(void *data, struct river_seat_v1 *obj, int32
     Seat *seat = data;
     seat->pointer_x = x;
     seat->pointer_y = y;
+
+    // Focus-follows-mouse lives here, not in pointer_enter(): this event
+    // only fires on genuine pointer motion, so focus only ever follows a
+    // cursor you actually moved - not a window that reflowed underneath
+    // a stationary one. seat->hovered is kept accurate by
+    // pointer_enter/pointer_leave regardless of why it changed; we just
+    // wait for real motion before acting on it.
+    if(seat->hovered != NULL && seat->hovered != seat->focused) {
+        set_focus(seat, seat->hovered);
+    }
 
     Output *output;
     wl_list_for_each(output, &axe.outputs, link) {

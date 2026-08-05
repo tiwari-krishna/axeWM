@@ -151,7 +151,7 @@ static Keys keybinds[] = {
     {SUPER|CONTROL, XKB_KEY_Return, zoom,            {0} },
     {SUPER,         XKB_KEY_f,  togglefloating,  {0} },
     {SUPER|SHIFT,   XKB_KEY_f,      togglefullscreen,{0} },
-    {SUPER,         XKB_KEY_0,      togglesticky,    {0} },
+    {SUPER,         XKB_KEY_g,      togglesticky,    {0} },
 
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
