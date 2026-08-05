@@ -204,6 +204,9 @@ void river_window_v1_dimensions(void *data, struct river_window_v1 *obj, int32_t
     // Mid-drag, ignore this entirely - see window_has_active_op() above.
     if(window_has_active_op(window)) return;
 
+    // If fullscreen don't overwrite the position/geometry
+    if(window->fullscreen) return;
+
     bool first_real_size = !window->got_real_dimensions;
     window->got_real_dimensions = true;
 
