@@ -335,8 +335,9 @@ static void redraw(Output *o) {
 
     if(o->bar_surface == NULL) {
         o->bar_surface = wl_compositor_create_surface(compositor);
+        uint32_t bar_layer = bar_autohide ? ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY : ZWLR_LAYER_SHELL_V1_LAYER_TOP;
         o->bar_layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-            wlr_layer_shell, o->bar_surface, o->wl_output, ZWLR_LAYER_SHELL_V1_LAYER_TOP, "axe-bar");
+            wlr_layer_shell, o->bar_surface, o->wl_output, bar_layer, "axe-bar");
 
         extern const struct zwlr_layer_surface_v1_listener bar_layer_surface_listener;
         zwlr_layer_surface_v1_add_listener(o->bar_layer_surface, &bar_layer_surface_listener, o);
