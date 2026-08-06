@@ -94,6 +94,8 @@ struct Output {
     uint32_t seltag;
     uint32_t tagmask;
 
+    int tiled_count;
+
     // For idle.c's display-off timeout only - unrelated to river's own
     // river_output_v1, obtained via the river_output_v1.wl_output event.
     struct wl_output *wl_output;
@@ -127,6 +129,8 @@ struct Seat {
     int op_mode; // 0 = move, 1 = resize
     int op_orig_x, op_orig_y, op_orig_w, op_orig_h;
     bool op_ending;
+
+    int op_last_x, op_last_y, op_last_w, op_last_h;
 
     bool op_move_x, op_move_y;
     int pointer_x, pointer_y;

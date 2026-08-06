@@ -363,6 +363,8 @@ void movewin(Seat *seat, Arg *arg) {
     seat->op_mode = 0;
     seat->op_orig_x = w->floatx;
     seat->op_orig_y = w->floaty;
+    seat->op_last_x = w->floatx;
+    seat->op_last_y = w->floaty;
     river_seat_v1_op_start_pointer(seat->river_seat);
 }
 
@@ -378,6 +380,10 @@ void resizewin(Seat *seat, Arg *arg) {
     seat->op_orig_y = w->floaty;
     seat->op_orig_w = w->floatw;
     seat->op_orig_h = w->floath;
+    seat->op_last_x = w->floatx;
+    seat->op_last_y = w->floaty;
+    seat->op_last_w = w->floatw;
+    seat->op_last_h = w->floath;
 
     // Which corner was grabbed determines which edges move: the
     // left/top half of the window anchors the opposite (right/bottom)

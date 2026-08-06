@@ -58,30 +58,42 @@ void river_seat_v1_window_interaction(void *data, struct river_seat_v1 *obj, str
 }
 
 void river_seat_v1_shell_surface_interaction(void *data, struct river_seat_v1 *obj, struct river_shell_surface_v1 *river_shell_surface) {}
+
 void river_seat_v1_op_delta(void *data, struct river_seat_v1 *obj, int32_t dx, int32_t dy) {
     Seat *seat = data;
     if(seat->op_window == NULL) return;
+    Window *ow = seat->op_window;
 
     if(seat->op_mode == 0) { // move
-        seat->op_window->floatx = seat->op_orig_x + dx;
-        seat->op_window->floaty = seat->op_orig_y + dy;
+        ow->floatx = seat->op_orig_x + dx;
+        ow->floaty = seat->op_orig_y + dy;
+
+        // Skip the manage/render round trip if this tick didn't actually
+        // move anything (sub-pixel jitter, duplicate motion events).
+        if(ow->floatx == seat->op_last_x && ow->floaty == seat->op_last_y) return;
+        seat->op_last_x = ow->floatx;
+        seat->op_last_y = ow->floaty;
     } else { // resize
-        // int w = seat->op_orig_w + dx;
-        // int h = seat->op_orig_h + dy;
-        // seat->op_window->floatw = w < 32 ? 32 : w;
-        // seat->op_window->floath = h < 32 ? 32 : h;
         int w = seat->op_move_x ? seat->op_orig_w - dx : seat->op_orig_w + dx;
         int h = seat->op_move_y ? seat->op_orig_h - dy : seat->op_orig_h + dy;
         if(w < 32) w = 32;
         if(h < 32) h = 32;
 
-        seat->op_window->floatw = w;
-        seat->op_window->floath = h;
+        ow->floatw = w;
+        ow->floath = h;
         // Re-derive x/y from the (possibly clamped) w/h so the opposite
         // edge stays exactly anchored even once the 32px minimum kicks in.
-        seat->op_window->floatx = seat->op_move_x ? seat->op_orig_x + (seat->op_orig_w - w) : seat->op_orig_x;
-        seat->op_window->floaty = seat->op_move_y ? seat->op_orig_y + (seat->op_orig_h - h) : seat->op_orig_y;
+        ow->floatx = seat->op_move_x ? seat->op_orig_x + (seat->op_orig_w - w) : seat->op_orig_x;
+        ow->floaty = seat->op_move_y ? seat->op_orig_y + (seat->op_orig_h - h) : seat->op_orig_y;
+
+        if(ow->floatx == seat->op_last_x && ow->floaty == seat->op_last_y &&
+           ow->floatw == seat->op_last_w && ow->floath == seat->op_last_h) return;
+        seat->op_last_x = ow->floatx;
+        seat->op_last_y = ow->floaty;
+        seat->op_last_w = ow->floatw;
+        seat->op_last_h = ow->floath;
     }
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 void river_seat_v1_op_release(void *data, struct river_seat_v1 *obj) {
@@ -93,6 +105,8 @@ void river_seat_v1_pointer_position(void *data, struct river_seat_v1 *obj, int32
     Seat *seat = data;
     seat->pointer_x = x;
     seat->pointer_y = y;
+
+    if(seat->op_window != NULL) return;
 
     // Focus-follows-mouse lives here, not in pointer_enter(): this event
     // only fires on genuine pointer motion, so focus only ever follows a

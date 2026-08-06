@@ -43,6 +43,8 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
         int n = count_tiled_windows(output);
         int m = output->nmaster;
 
+        output->tiled_count = n;
+
         bool solo = n <= 1;
         int og = (smart_gap && solo) ? 0 : outer_gap;
         int ig = (smart_gap && solo) ? 0 : inner_gap;
