@@ -174,6 +174,7 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
         }
     }
 
+    river_node_v1_destroy(window->river_node);
     river_window_v1_destroy(window->river_window);
     wl_list_remove(&window->link);
     free(window);

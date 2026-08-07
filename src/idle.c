@@ -125,9 +125,23 @@ static void setup_seat_idle(Seat *seat) {
     }
 }
 
+static void output_power_mode(void *data, struct zwlr_output_power_v1 *obj, uint32_t mode) {}
+
+static void output_power_failed(void *data, struct zwlr_output_power_v1 *obj) {
+    Output *output = data;
+    zwlr_output_power_v1_destroy(obj);
+    if(output->power == obj) output->power = NULL;
+}
+
+static const struct zwlr_output_power_v1_listener output_power_listener = {
+    .mode = output_power_mode,
+    .failed = output_power_failed,
+};
+
 static void ensure_output_power(Output *output) {
     if(output->wl_output == NULL || power_manager == NULL || output->power != NULL) return;
     output->power = zwlr_output_power_manager_v1_get_output_power(power_manager, output->wl_output);
+    zwlr_output_power_v1_add_listener(output->power, &output_power_listener, output);
 }
 
 void idle_attach_wl_seat(Seat *seat, uint32_t name) {

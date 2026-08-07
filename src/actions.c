@@ -370,6 +370,8 @@ void togglelayout(Seat *seat, Arg *arg) {
 // Start an interactive move of the hovered window via mouse drag. Only
 // affects floating windows, as asked - tiled windows don't drag.
 void movewin(Seat *seat, Arg *arg) {
+    if(seat->op_window != NULL) return;
+
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
 

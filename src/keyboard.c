@@ -139,7 +139,11 @@ void river_xkb_keymap_v1_success(void *data, struct river_xkb_keymap_v1 *river_x
 }
 
 void river_xkb_keymap_v1_failure(void *data, struct river_xkb_keymap_v1 *river_xkb_keymap_v1, const char *error_msg) {
-    fprintf(stderr, "Failed to create keymap\n");
+    fprintf(stderr, "Failed to create keymap: %s\n", error_msg ? error_msg : "(no message)");
+    if(xkb_keymap == river_xkb_keymap_v1) {
+        river_xkb_keymap_v1_destroy(river_xkb_keymap_v1);
+        xkb_keymap = NULL;
+    }
 }
 
 const struct river_xkb_keymap_v1_listener xkb_keymap_listener = {

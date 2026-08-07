@@ -118,6 +118,7 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
                                       RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
                                       RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT);
 
+            river_node_v1_place_bottom(window->river_node);
             // bool two = m < n && m != 0;
 
             int si = i < m ? i : i - m;
