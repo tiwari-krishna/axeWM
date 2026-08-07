@@ -6,6 +6,7 @@
 void river_output_v1_removed(void *data, struct river_output_v1 *obj) {
     Output *output = data;
     bar_destroy(output);
+    tabbar_destroy(output);
 
     // FIX: selmon previously kept pointing at this Output after it's freed
     // below if this happened to be the currently-selected monitor (e.g. a
@@ -111,6 +112,7 @@ void river_output_v1_removed(void *data, struct river_output_v1 *obj) {
 void river_output_v1_wl_output(void *data, struct river_output_v1 *obj, uint32_t name) {
     idle_attach_wl_output((Output *) data, name);
     bar_output_ready((Output *) data);
+    tabbar_output_ready((Output *) data);
 }
 
 void river_output_v1_position(void *data, struct river_output_v1 *obj, int32_t x, int32_t y) {

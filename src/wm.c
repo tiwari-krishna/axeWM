@@ -42,12 +42,13 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
         int i = 0;
         int n = count_tiled_windows(output);
         int m = output->nmaster;
+        bool tabbed = output->layout == LAYOUT_TABBED;
 
         output->tiled_count = n;
 
         bool solo = n <= 1;
-        int og = (smart_gap && solo) ? 0 : outer_gap;
-        int ig = (smart_gap && solo) ? 0 : inner_gap;
+        int og = (tabbed || (smart_gap && solo)) ? 0 : outer_gap;
+        int ig = (tabbed || (smart_gap && solo)) ? 0 : inner_gap;
 
         // Shrink the usable area by outer_gap on every side before any
         // column math runs, so "gap to the screen edge" is exact
@@ -60,7 +61,7 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
         float mfact = two ? output->mfact : 1;
         int master_w = (m == 0) ? 0 : (int) (area_w * mfact);
 
-        int tile_inset = solo ? 0 : (int) borderpx;
+        int tile_inset = (tabbed || solo) ? 0 : (int) borderpx;
         // Half of inner_gap on every side of every tile: between two
         // adjacent tiles that sums to exactly inner_gap; against the
         // outer boundary it stacks with outer_gap (standard gaps
@@ -100,6 +101,19 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
                 continue;
             }
 
+            if(tabbed) {
+                // Every tiled window on a tabbed output gets the exact
+                // same full-size slot - only the front one (raised in
+                // manage_seat, seat.c) is actually visible. That's the
+                // whole layout: no columns, no gaps, no per-index math.
+                river_window_v1_set_tiled(window->river_window,
+                                          RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
+                                          RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT);
+                window_set_position(window, 0, 0);
+                window_set_dimensions(window, MAX(area_w, 1), MAX(area_h, 1));
+                continue;
+            }
+
             river_window_v1_set_tiled(window->river_window,
                                       RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
                                       RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT);
@@ -135,6 +149,7 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
     }
 
     bar_redraw_all();
+    tabbar_redraw_all();
     river_window_manager_v1_manage_finish(window_manager);
 }
 

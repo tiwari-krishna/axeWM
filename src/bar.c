@@ -225,7 +225,7 @@ static FT_Face face_for_codepoint(uint32_t cp) {
     return NULL;
 }
 
-static int measure_text_width(const char *s) {
+int measure_text_width(const char *s) {
     int width = 0;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
@@ -275,7 +275,7 @@ static void blend_pixel_bgra(uint8_t *buf, int w, int h, int x, int y, const uin
 }
 
 
-static void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]) {
+void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]) {
     int pen_x = x;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
@@ -316,7 +316,7 @@ static void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const ui
     }
 }
 
-static void fill_rect(uint8_t *buf, int w, int h, int x0, int y0, int x1, int y1, const uint8_t color[4]) {
+void fill_rect(uint8_t *buf, int w, int h, int x0, int y0, int x1, int y1, const uint8_t color[4]) {
     if(x0 < 0) x0 = 0;
     if(y0 < 0) y0 = 0;
     if(x1 > w) x1 = w;

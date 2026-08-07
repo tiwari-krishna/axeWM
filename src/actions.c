@@ -189,6 +189,7 @@ void focus_next(Seat *seat, Arg *arg) {
     if(next != NULL) {
         set_focus(seat, next);
         river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -199,6 +200,7 @@ void focus_prev(Seat *seat, Arg *arg) {
     if(prev != NULL) {
         set_focus(seat, prev);
         river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
+        river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
@@ -274,6 +276,7 @@ void toggletag(Seat *seat, Arg *arg) {
 // participate in tiling order and are ignored.
 void movestack(Seat *seat, Arg *arg) {
     if(seat->focused == NULL || seat->focused->floating || seat->focused->sticky) return;
+    if(seat->focused->mon != NULL && seat->focused->mon->layout == LAYOUT_TABBED) return;
 
     Window *other = adjacent_tiled(seat->focused, arg->i);
     if(other == NULL) return;
@@ -352,6 +355,17 @@ void togglesticky(Seat *seat, Arg *arg) {
 
     river_window_manager_v1_manage_dirty(window_manager);
 }
+
+// Toggle the current monitor between normal tiling and the tabbed
+// layout (one full-size slot per tiled window, no gaps/borders,
+// switched via an i3-style tab strip - see tabbar.c). Per-output, same
+// as nmaster/mfact, so different monitors can run different layouts.
+void togglelayout(Seat *seat, Arg *arg) {
+    if(selmon == NULL) return;
+    selmon->layout = (selmon->layout == LAYOUT_TABBED) ? LAYOUT_TILE : LAYOUT_TABBED;
+    river_window_manager_v1_manage_dirty(window_manager);
+}
+
 
 // Start an interactive move of the hovered window via mouse drag. Only
 // affects floating windows, as asked - tiled windows don't drag.

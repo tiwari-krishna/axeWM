@@ -33,6 +33,11 @@ typedef struct Window Window;
 typedef struct Output Output;
 typedef struct Seat Seat;
 
+typedef enum {
+    LAYOUT_TILE = 0,
+    LAYOUT_TABBED,
+} Layout;
+
 struct Window {
     struct river_window_v1 *river_window;
     struct river_node_v1 *river_node;
@@ -111,6 +116,23 @@ struct Output {
     uint32_t bar_last_occupied; // cached, to skip redundant redraws
     uint32_t bar_last_seltag;
     uint32_t bar_last_status_epoch;
+
+    // Tiling layout for this output. LAYOUT_TILE (default, and what a
+    // fresh calloc'd Output gets - LAYOUT_TILE == 0) is the usual
+    // master/stack. LAYOUT_TABBED gives every tiled window the same
+    // full-size slot (no gaps/borders) and shows an i3-style tab strip
+    // instead - see tabbar.c. Toggled per-output with togglelayout.
+    Layout layout;
+
+    // tabbar.c's own layer-shell surface - separate from bar_surface
+    // above, only reserved/shown while layout == LAYOUT_TABBED.
+    struct wl_surface *tab_surface;
+    struct zwlr_layer_surface_v1 *tab_layer_surface;
+    struct wl_buffer *tab_buffer;
+    int tab_configured_w, tab_configured_h;
+    int tab_buf_w, tab_buf_h;
+    bool tab_last_layout; // was the strip showing last redraw - detects the TILE<->TABBED edge
+    uint32_t tab_last_hash; // cheap signature of what's drawn, to skip redundant redraws
 };
 
 struct Seat {
@@ -296,6 +318,7 @@ void togglefullscreen(Seat *seat, Arg *arg);
 void movewin(Seat *seat, Arg *arg);
 void resizewin(Seat *seat, Arg *arg);
 void togglesticky(Seat *seat, Arg *arg);
+void togglelayout(Seat *seat, Arg *arg);
 
 // ---------------------------------------------------------------------
 // restart.c - self-exec restart with saved window/output state
@@ -317,6 +340,12 @@ void apply_rules(Window *window);
 void window_set_position(Window *window, int x, int y);
 void window_set_dimensions(Window *window, int width, int height);
 void render_window(Window *window);
+
+// Exported so tabbar.c can draw tab labels with the exact same font/
+// rendering path as the status bar, without loading its own fonts.
+void fill_rect(uint8_t *buf, int w, int h, int x0, int y0, int x1, int y1, const uint8_t color[4]);
+int measure_text_width(const char *s);
+void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]);
 
 // ---------------------------------------------------------------------
 // output.c - river_output_v1 / layer-shell output handling
@@ -375,5 +404,13 @@ void bar_setup_seat_autohide(Seat *seat);
 int bar_status_fd(void);
 void bar_status_readable(void);
 void bar_kill_status(void);
+
+// ---------------------------------------------------------------------
+// tabbar.c - i3-style tab strip for LAYOUT_TABBED outputs
+// ---------------------------------------------------------------------
+void tabbar_manager_ready(void);
+void tabbar_output_ready(Output *output);
+void tabbar_redraw_all(void);
+void tabbar_destroy(Output *output);
 
 #endif /* AXEH */

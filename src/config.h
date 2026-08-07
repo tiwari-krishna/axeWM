@@ -37,6 +37,16 @@ static const bool smart_gap  = false;
 static const int outer_gap   = 10;
 static const int inner_gap   = 5;
 
+/* tabbed layout (Super+t): gaps/borders are suppressed for that output
+ * and every tiled window shares one full-size slot; an i3-style tab
+ * strip lists them across the top (or bottom, matching bar_at_bottom),
+ * drawn with the same font/rendering path as the status bar above. */
+static const int tab_height = 20;
+static const uint8_t tab_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xff };
+static const uint8_t tab_fg_color[4]     = { 0xd8, 0xde, 0xe9, 0xff };
+static const uint8_t tab_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff };
+static const uint8_t tab_sel_fg_color[4] = { 0xff, 0xff, 0xff, 0xff };
+
 /* spawned once at startup and left running; each newline it writes to
  * stdout becomes the new status text (no polling - update on your own
  * schedule, e.g. via a signal to your own script). NULL to disable. */
@@ -152,6 +162,7 @@ static Keys keybinds[] = {
     {SUPER,         XKB_KEY_f,  togglefloating,  {0} },
     {SUPER|SHIFT,   XKB_KEY_f,      togglefullscreen,{0} },
     {SUPER,         XKB_KEY_g,      togglesticky,    {0} },
+    {SUPER,         XKB_KEY_Tab,      togglelayout,    {0} },
 
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },

@@ -37,16 +37,19 @@ void wl_registry_global(void *data, struct wl_registry *registry, uint32_t name,
     if(strcmp(interface, wl_compositor_interface.name) == 0) {
         compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
         bar_manager_ready();
+        tabbar_manager_ready();
     }
 
     if(strcmp(interface, wl_shm_interface.name) == 0) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
         bar_manager_ready();
+        tabbar_manager_ready();
     }
 
     if(strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
         wlr_layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
         bar_manager_ready();
+        tabbar_manager_ready();
     }
     if(strcmp(interface, wl_seat_interface.name) == 0) {
         idle_track_wl_seat(registry, name);

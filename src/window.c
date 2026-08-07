@@ -134,6 +134,11 @@ void render_window(Window *window) {
         return;
     }
 
+    if(window->mon != NULL && window->mon->layout == LAYOUT_TABBED) {
+        river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
+        return;
+    }
+
     if(window->mon->tiled_count <= 1) {
         river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
         return;

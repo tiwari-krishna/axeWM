@@ -87,7 +87,7 @@ void river_seat_v1_op_delta(void *data, struct river_seat_v1 *obj, int32_t dx, i
         ow->floaty = seat->op_move_y ? seat->op_orig_y + (seat->op_orig_h - h) : seat->op_orig_y;
 
         if(ow->floatx == seat->op_last_x && ow->floaty == seat->op_last_y &&
-           ow->floatw == seat->op_last_w && ow->floath == seat->op_last_h) return;
+            ow->floatw == seat->op_last_w && ow->floath == seat->op_last_h) return;
         seat->op_last_x = ow->floatx;
         seat->op_last_y = ow->floaty;
         seat->op_last_w = ow->floatw;
@@ -163,13 +163,14 @@ void manage_seat(Seat *seat) {
     if(seat->focused != NULL) {
         river_seat_v1_focus_window(seat->river_seat, seat->focused->river_window);
         // river_node_v1_place_top(seat->focused->river_node);
-        if(seat->focused->floating || seat->focused->sticky || seat->focused->fullscreen) {
+        if(seat->focused->floating || seat->focused->sticky || seat->focused->fullscreen ||
+            (seat->focused->mon != NULL && seat->focused->mon->layout == LAYOUT_TABBED)) {
             river_node_v1_place_top(seat->focused->river_node);
         }
         if(seat->pending_warp && !seat->focused->floating && !seat->focused->sticky) {
             river_seat_v1_pointer_warp(seat->river_seat,
-                seat->focused->x + seat->focused->width/2,
-                seat->focused->y + seat->focused->height/2);
+                                       seat->focused->x + seat->focused->width/2,
+                                       seat->focused->y + seat->focused->height/2);
         }
     } else {
         river_seat_v1_clear_focus(seat->river_seat);
