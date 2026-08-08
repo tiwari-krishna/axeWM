@@ -232,6 +232,29 @@ void view(Seat *seat, Arg *arg) {
     }
 }
 
+// Jump straight to the Nth (1-based, arg->i) tiled+visible window on
+// selmon, in the same order tabbar.c numbers and lists them - so the
+// "(3)" printed on a tab and the keybind that lands on it always agree.
+// Works in any layout, not just LAYOUT_TABBED (it's just "select tiled
+// window N"), but that's the main use: jumping straight to a tab instead
+// of stepping through with focus_next/focus_prev. Silently does nothing
+// if there's no Nth tiled window (arg->i out of range, or arg->i < 1).
+void tabselect(Seat *seat, Arg *arg) {
+    if(selmon == NULL || arg->i < 1) return;
+
+    int idx = 0;
+    Window *win;
+    wl_list_for_each(win, &axe.windows, link) {
+        if(win->mon != selmon || win->floating || win->sticky || !ISVISIBLE(win)) continue;
+        idx++;
+        if(idx != arg->i) continue;
+
+        set_focus(seat, win);
+        river_window_manager_v1_manage_dirty(window_manager);
+        return;
+    }
+}
+
 void togglebar(Seat *seat, Arg *arg) {
     bar_toggle();
 }

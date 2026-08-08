@@ -427,5 +427,6 @@ void tabbar_redraw_all(void);
 void tabbar_destroy(Output *output);
 void tabbar_init(void);
 void tabbar_set_visible(bool visible);
+void tabselect(Seat *seat, Arg *arg);
 
 #endif /* AXEH */

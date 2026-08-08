@@ -84,8 +84,9 @@ static void redraw(Output *o) {
         if(!want) return; // never needed yet - nothing to create
 
         o->tab_surface = wl_compositor_create_surface(compositor);
+        uint32_t tab_layer = tab_autohide ? ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY : ZWLR_LAYER_SHELL_V1_LAYER_TOP;
         o->tab_layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-            wlr_layer_shell, o->tab_surface, o->wl_output, ZWLR_LAYER_SHELL_V1_LAYER_TOP, "axe-tabbar");
+            wlr_layer_shell, o->tab_surface, o->wl_output, tab_layer, "axe-tabbar");
 
         extern const struct zwlr_layer_surface_v1_listener tab_layer_surface_listener;
         zwlr_layer_surface_v1_add_listener(o->tab_layer_surface, &tab_layer_surface_listener, o);
@@ -96,7 +97,7 @@ static void redraw(Output *o) {
         anchor |= tab_at_bottom ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
         zwlr_layer_surface_v1_set_anchor(o->tab_layer_surface, anchor);
         zwlr_layer_surface_v1_set_size(o->tab_layer_surface, 0, tab_height);
-        zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, tab_height);
+        zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, tab_autohide ? 0 : tab_height);
         o->tab_last_layout = true;
 
         struct wl_region *empty = wl_compositor_create_region(compositor);
@@ -110,10 +111,12 @@ static void redraw(Output *o) {
     // Surface already exists - toggle its reserved space (not the
     // surface itself) to match the current layout. Same "stay mapped,
     // only swap buffer content" approach as bar.c's draw_blank(), for
-    // the same protocol-safety reason documented there.
+    // the same protocol-safety reason documented there. Exclusive zone
+    // only ever moves while !tab_autohide - in overlay mode it's always
+    // 0 and never resizes anything, matching bar.c's bar_set_visible.
     if(!want) {
         if(o->tab_last_layout) {
-            zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, 0);
+            if(!tab_autohide) zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, 0);
             draw_blank(o);
         }
         o->tab_last_layout = false;
@@ -121,7 +124,7 @@ static void redraw(Output *o) {
     }
 
     if(!o->tab_last_layout) {
-        zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, tab_height);
+        if(!tab_autohide) zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, tab_height);
         o->tab_buf_w = -1; // force a full redraw once space is reclaimed
     }
     o->tab_last_layout = true;
@@ -181,7 +184,16 @@ static void redraw(Output *o) {
             const uint8_t *fg = win->focused ? tab_sel_fg_color : tab_fg_color;
             fill_rect(buf, w, h, x, 0, x + cw, h, bg);
 
-            const char *title = win->title[0] ? win->title : (win->app_id[0] ? win->app_id : "?");
+            // Numbered to match tabselect()'s SUPER+ALT+N binds (same
+            // 1-based order, same filter) - only up to 9, since that's
+            // as many digit keys as there are to jump with.
+            const char *base_title = win->title[0] ? win->title : (win->app_id[0] ? win->app_id : "?");
+            char labeled[300];
+            const char *title = base_title;
+            if(idx < 9) {
+                snprintf(labeled, sizeof(labeled), "(%d) %s", idx + 1, base_title);
+                title = labeled;
+            }
             draw_text(buf, w, h, x + 6, title, fg);
 
             x += cw;

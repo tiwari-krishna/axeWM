@@ -146,6 +146,11 @@ static const int display_off_timeout_ms = 60000;
     {SUPER|SHIFT,         KEY, tag,        { .u = 1 << TAG } }, \
     {SUPER|SHIFT|CONTROL, KEY, toggletag,  { .u = 1 << TAG } },
 
+// Jump straight to the Nth tab (1-9)
+// TAGKEY above (toggleview), SUPER+ALT
+#define TABKEY(KEY,N) \
+{SUPER|ALT, KEY, tabselect, { .i = N } },
+
 static const char *termcmd[] = { "footclient", NULL };
 static const char *launchercmd[] = { "fuzzel", NULL };
 
@@ -300,6 +305,16 @@ static Keys keybinds[] = {
     TAGKEY(XKB_KEY_7, 6)
     TAGKEY(XKB_KEY_8, 7)
     TAGKEY(XKB_KEY_9, 8)
+
+    TABKEY(XKB_KEY_1, 1)
+    TABKEY(XKB_KEY_2, 2)
+    TABKEY(XKB_KEY_3, 3)
+    TABKEY(XKB_KEY_4, 4)
+    TABKEY(XKB_KEY_5, 5)
+    TABKEY(XKB_KEY_6, 6)
+    TABKEY(XKB_KEY_7, 7)
+    TABKEY(XKB_KEY_8, 8)
+    TABKEY(XKB_KEY_9, 9)
 };
 
 static Mousebinds mousebinds[] = {
