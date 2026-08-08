@@ -178,6 +178,19 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
         }
     }
 
+    // Same idea as seat->focused/hovered/op_window just above: clear
+    // every last_focused[] slot (on every output, not just window->mon -
+    // movemon could have moved this window since it was remembered
+    // somewhere else) that still points at this Window before it's freed
+    // below, or manage_seat()'s refocus fallback in seat.c would read
+    // freed memory the next time that tag needs a refocus.
+    Output *o;
+    wl_list_for_each(o, &axe.outputs, link) {
+        for(int t = 0; t < TAG_COUNT; t++) {
+            if(o->last_focused[t] == window) o->last_focused[t] = NULL;
+        }
+    }
+
     river_node_v1_destroy(window->river_node);
     river_window_v1_destroy(window->river_window);
     wl_list_remove(&window->link);

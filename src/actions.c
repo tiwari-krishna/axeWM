@@ -87,6 +87,9 @@ void set_focus(Seat *seat, Window *window) {
     seat->focused = window;
     if(window != NULL) {
         window->focused = true;
+        if(window->mon != NULL) {
+            window->mon->last_focused[tagidx(window->mon)] = window;
+        }
     }
 }
 

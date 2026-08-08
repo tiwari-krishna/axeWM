@@ -223,6 +223,7 @@ static Keys keybinds[] = {
 
     /* Misc Tools */
     { SUPER|SHIFT,          XKB_KEY_y,              spawn,          SHCMD("emoji-picker") },
+    { SUPER,                XKB_KEY_t,              spawn,          SHCMD("axe-tray-menu.py") },
 
     /* XF86 / Hardware Keys */
     { 0,                    XKB_KEY_XF86MonBrightnessUp,   spawn,   SHCMD("brightnessctl -e set 2%+") },

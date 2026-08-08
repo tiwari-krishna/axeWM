@@ -100,6 +100,8 @@ struct Output {
     uint32_t seltag;
     uint32_t tagmask;
 
+    Window *last_focused[TAG_COUNT];
+
     int tiled_count;
 
     // For idle.c's display-off timeout only - unrelated to river's own

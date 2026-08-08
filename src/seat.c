@@ -149,11 +149,28 @@ void manage_seat(Seat *seat) {
     }
 
     if(seat->focused == NULL || !ISVISIBLE(seat->focused)) {
-        Window *w, *found = NULL;
-        wl_list_for_each(w, &axe.windows, link) {
-            if(w->mon == selmon && ISVISIBLE(w)) {
-                found = w;
-                break;
+        Window *found = NULL;
+
+        // Prefer whatever was last focused while viewing this tag on
+        // this output - this is the actual fix for "switching tags and
+        // back always lands on master/the first tab": without it, the
+        // scan below just grabs the first ISVISIBLE window in list
+        // order every time, which is always master since new windows
+        // are inserted at the front (see window.c).
+        if(selmon != NULL) {
+            Window *remembered = selmon->last_focused[tagidx(selmon)];
+            if(remembered != NULL && remembered->mon == selmon && ISVISIBLE(remembered)) {
+                found = remembered;
+            }
+        }
+
+        if(found == NULL) {
+            Window *w;
+            wl_list_for_each(w, &axe.windows, link) {
+                if(w->mon == selmon && ISVISIBLE(w)) {
+                    found = w;
+                    break;
+                }
             }
         }
 
