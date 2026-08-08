@@ -94,6 +94,7 @@ static const int  touchpad_scroll_method   = RIVER_LIBINPUT_DEVICE_V1_SCROLL_MET
 static const char *autostart[][8] = {
     // { "waybar", NULL },
     { "mpd", NULL },
+    { "axe-trayd.py", NULL },
     { "foot", "-s", NULL },
     { "waybg", NULL },
     { "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", NULL },
