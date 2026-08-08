@@ -119,6 +119,7 @@ struct Output {
     uint32_t bar_last_occupied; // cached, to skip redundant redraws
     uint32_t bar_last_seltag;
     uint32_t bar_last_status_epoch;
+    bool bar_last_passthrough; // cached, so entering/leaving passthrough always redraws
 
     // Tiling layout, per-tag like nmaster/mfact above. LAYOUT_TILE
     // (default, and what a fresh calloc'd Output gets - LAYOUT_TILE == 0)
@@ -262,6 +263,7 @@ typedef struct {
 // ---------------------------------------------------------------------
 extern WindowManager axe;
 extern Output *selmon;
+extern bool passthrough;
 
 extern struct xkb_context *xkb_context;
 extern struct river_xkb_config_v1 *xkb_config;
@@ -430,5 +432,6 @@ void tabbar_destroy(Output *output);
 void tabbar_init(void);
 void tabbar_set_visible(bool visible);
 void tabselect(Seat *seat, Arg *arg);
+void togglepassthrough(Seat *seat, Arg *arg);
 
 #endif /* AXEH */

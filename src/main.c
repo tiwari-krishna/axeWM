@@ -17,6 +17,7 @@
 
 WindowManager axe;
 Output *selmon = NULL;
+bool passthrough = false;
 
 struct xkb_context *xkb_context;
 struct river_xkb_config_v1 *xkb_config;

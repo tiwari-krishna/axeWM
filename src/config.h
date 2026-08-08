@@ -28,6 +28,12 @@ static const uint8_t bar_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xff }; /* whole 
 static const uint8_t bar_tag_fg_color[4] = { 0xd8, 0xde, 0xe9, 0xff }; /* occupied-tag text + status text */
 static const uint8_t bar_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff }; /* highlight behind the current tag */
 
+/* takes over the whole bar background/text while passthrough mode is on
+ * (see togglepassthrough in actions.c) - impossible to miss, so you
+ * don't forget every bind but the toggle itself is currently disabled. */
+static const uint8_t bar_passthrough_bg_color[4] = { 0x7a, 0x1f, 0x1f, 0xff };
+static const uint8_t bar_passthrough_fg_color[4] = { 0xff, 0xe8, 0xe8, 0xff };
+
 /* gaps (px). outer_gap: between tiled windows and the screen edge.
  * inner_gap: between adjacent tiled windows. Both are independent of
  * borderpx - they stack with it, not replace it. smart_gap: when true,
@@ -184,6 +190,7 @@ static Keys keybinds[] = {
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
     {SUPER|CONTROL, XKB_KEY_q,      restart_axe,     {0} },
     {SUPER|ALT,     XKB_KEY_b,      togglebar,       {0} },
+    {SUPER|CONTROL, XKB_KEY_p,      togglepassthrough, {0} },
 
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
     // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },

@@ -377,12 +377,13 @@ static void redraw(Output *o) {
     // Skip the redraw entirely if nothing that would change the pixels
     // has actually changed - bar_redraw_all() gets called on every
     // manage_start, including mid-drag frames.
-    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag && o->bar_last_status_epoch == status_epoch) {
+    if(o->bar_buffer != NULL && o->bar_buf_w == w && o->bar_buf_h == h && o->bar_last_occupied == occupied && o->bar_last_seltag == o->seltag && o->bar_last_status_epoch == status_epoch && o->bar_last_passthrough == passthrough) {
         return;
     }
     o->bar_last_occupied = occupied;
     o->bar_last_seltag = o->seltag;
     o->bar_last_status_epoch = status_epoch;
+    o->bar_last_passthrough = passthrough;
 
     int stride = w * 4;
     int size = stride * h;
@@ -399,7 +400,9 @@ static void redraw(Output *o) {
         return;
     }
 
-    fill_rect(buf, w, h, 0, 0, w, h, bar_bg_color);
+    fill_rect(buf, w, h, 0, 0, w, h, passthrough ? bar_passthrough_bg_color : bar_bg_color);
+
+    const uint8_t *fg = passthrough ? bar_passthrough_fg_color : bar_tag_fg_color;
 
     int cellw = h; // square-ish tag cells, scaled off bar height
     int x = 0;
@@ -411,14 +414,19 @@ static void redraw(Output *o) {
 
         char label[2] = { (char) ('1' + t), '\0' };
         int tw = measure_text_width(label);
-        draw_text(buf, w, h, x + (cellw - tw) / 2, label, bar_tag_fg_color);
+        draw_text(buf, w, h, x + (cellw - tw) / 2, label, fg);
 
         x += cellw;
     }
 
+    if(passthrough) {
+        x += 6;
+        draw_text(buf, w, h, x, "PASSTHROUGH", fg);
+    }
+
     if(cmd_output[0] != '\0') {
         int tw = measure_text_width(cmd_output);
-        draw_text(buf, w, h, w - tw - 8, cmd_output, bar_tag_fg_color);
+        draw_text(buf, w, h, w - tw - 8, cmd_output, fg);
     }
 
     munmap(buf, size);

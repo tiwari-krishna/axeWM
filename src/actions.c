@@ -262,6 +262,43 @@ void togglebar(Seat *seat, Arg *arg) {
     bar_toggle();
 }
 
+// "Passthrough" mode: disable every keybind and mousebind - on every
+// seat - except this one (the way back out), so a game or VM gets every
+// keystroke and click with nothing intercepted along the way.
+//
+// Deliberately NOT disabled: any hold-to-reveal gesture (currently just
+// the bar/tabbar Super-hold peek - see bar_setup_seat_autohide in
+// bar.c, the only thing using xkb_hold_binding_create and therefore the
+// only Key with a non-NULL release_func). The bar keeps behaving exactly
+// as it does outside passthrough - shows while Super is held, hides on
+// release, stays out of the way (no forced-visible override) otherwise,
+// which matters since the whole point is usually a fullscreen game.
+// Checking it mid-game is a real key event, which as a simple side
+// effect also resets ext-idle-notify-v1's idle timer - not something
+// built on purpose, just a side benefit of not disabling it.
+//
+// Pure river_xkb_binding_v1/river_pointer_binding_v1 enable/disable
+// toggling - no window-management state changes, so no manage_dirty.
+void togglepassthrough(Seat *seat, Arg *arg) {
+    passthrough = !passthrough;
+
+    Seat *s;
+    wl_list_for_each(s, &axe.seats, link) {
+        Key *key;
+        wl_list_for_each(key, &s->keys, link) {
+            if(key->func == togglepassthrough || key->release_func != NULL) continue;
+            if(passthrough) river_xkb_binding_v1_disable(key->river_xkb_binding);
+            else river_xkb_binding_v1_enable(key->river_xkb_binding);
+        }
+
+        Button *button;
+        wl_list_for_each(button, &s->buttons, link) {
+            if(passthrough) river_pointer_binding_v1_disable(button->river_pointer_binding);
+            else river_pointer_binding_v1_enable(button->river_pointer_binding);
+        }
+    }
+}
+
 void toggleview(Seat *seat, Arg *arg) {
     if(selmon == NULL) return;
 
