@@ -25,7 +25,6 @@
 static FT_Library ft_library;
 static FT_Face ft_face; // NULL if font load failed - drawing text becomes a no-op, bar still shows colored blocks
 static FT_Face ft_face_emoji; // NULL if unavailable/disabled - codepoints ft_face lacks fall back here
-static int baseline_y;
 
 static char cmd_output[256] = "";
 
@@ -36,6 +35,12 @@ static pid_t status_pid = -1;
 static char status_line_buf[512];
 static size_t status_line_len = 0;
 static uint32_t status_epoch = 0; // bumped on every status text change - see redraw()'s dedup check
+
+// Font metrics only - height-independent. draw_text() is shared with
+// tabbar.c, whose strip height (tab_height) can differ from the status
+// bar's (bar_height), so the actual baseline has to be derived per-call
+// from the target buffer's own height, not baked in once at startup.
+static int line_ascender, line_descender;
 
 // Spawn bar_status_cmd once, left running for the lifetime of this axe
 // process. Its stdout is piped back to us non-blocking; bar_status_readable()
@@ -188,12 +193,8 @@ void bar_init(void) {
         return;
     }
 
-
-    int ascender = ft_face->size->metrics.ascender >> 6;
-    int descender = ft_face->size->metrics.descender >> 6; // negative
-    int line_h = ascender - descender;
-    baseline_y = (bar_height - line_h) / 2 + ascender;
-
+    line_ascender = ft_face->size->metrics.ascender >> 6;
+    line_descender = ft_face->size->metrics.descender >> 6; // negative
     spawn_status();
 }
 
@@ -277,6 +278,8 @@ static void blend_pixel_bgra(uint8_t *buf, int w, int h, int x, int y, const uin
 
 void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]) {
     int pen_x = x;
+    int line_h = line_ascender - line_descender;
+    int baseline_y = (h - line_h) / 2 + line_ascender;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
         FT_Face face = face_for_codepoint(cp);
@@ -552,15 +555,21 @@ void bar_toggle(void) {
     bar_set_visible(!bar_visible);
 }
 
+// FIX: these now drive tabbar visibility too, not just the bar - see the
+// comment on bar_setup_seat_autohide below for why this is one shared
+// hold gesture rather than a second independent binding.
 static void bar_show_on_press(Seat *seat, Arg *arg) {
-    bar_set_visible(true);
+    if(bar_autohide) bar_set_visible(true);
+    if(tab_autohide) tabbar_set_visible(true);
 }
+
 static void bar_hide_on_release(Seat *seat, Arg *arg) {
-    bar_set_visible(false);
+    if(bar_autohide) bar_set_visible(false);
+    if(tab_autohide) tabbar_set_visible(false);
 }
 
 void bar_setup_seat_autohide(Seat *seat) {
-    if(!bar_autohide) return;
+    if(!bar_autohide && !tab_autohide) return;
     xkb_hold_binding_create(seat, 0, XKB_KEY_Super_L, bar_show_on_press, bar_hide_on_release, &bar_hold_arg);
     xkb_hold_binding_create(seat, 0, XKB_KEY_Super_R, bar_show_on_press, bar_hide_on_release, &bar_hold_arg);
 }

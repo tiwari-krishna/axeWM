@@ -31,8 +31,9 @@ typedef struct {
 
 typedef struct {
     int index;
-    int nmaster;
-    float mfact;
+    int nmaster[TAG_COUNT];
+    float mfact[TAG_COUNT];
+    int layout[TAG_COUNT];
     uint32_t seltag;
     uint32_t tagmask;
     struct wl_list link;
@@ -69,7 +70,20 @@ void load_restart_state(void) {
     while(fscanf(f, " %1s", kind) == 1) {
         if(kind[0] == 'O') {
             SavedOutput *o = calloc(1, sizeof(SavedOutput));
-            if(fscanf(f, "%d %d %f %u %u", &o->index, &o->nmaster, &o->mfact, &o->seltag, &o->tagmask) != 5) {
+            // FIX: the "O" line grew from 5 scalar fields to 3 scalars
+            // plus three TAG_COUNT-sized arrays (per-tag nmaster/mfact/
+            // layout). A state file written by an older binary won't
+            // match this shape - `ok` catches that cleanly and we just
+            // discard the (partially read) entry and stop, same as any
+            // other malformed line below. That means the very first
+            // restart after upgrading to per-tag layout starts fresh
+            // instead of migrating old state - expected and harmless,
+            // not a crash or corruption risk.
+            bool ok = fscanf(f, "%d %u %u", &o->index, &o->seltag, &o->tagmask) == 3;
+            for(int t = 0; ok && t < TAG_COUNT; t++) ok = fscanf(f, "%d", &o->nmaster[t]) == 1;
+            for(int t = 0; ok && t < TAG_COUNT; t++) ok = fscanf(f, "%f", &o->mfact[t]) == 1;
+            for(int t = 0; ok && t < TAG_COUNT; t++) ok = fscanf(f, "%d", &o->layout[t]) == 1;
+            if(!ok) {
                 free(o);
                 break;
             }
@@ -103,10 +117,13 @@ void apply_saved_output_state(Output *output) {
     SavedOutput *o;
     wl_list_for_each(o, &saved_outputs, link) {
         if(o->index != index) continue;
-        output->nmaster = o->nmaster;
-        CLAMP(output->nmaster, 0, (1 << 16));
-        output->mfact = o->mfact;
-        CLAMP(output->mfact, 0, 1);
+        for(int t = 0; t < TAG_COUNT; t++) {
+            output->nmaster[t] = o->nmaster[t];
+            CLAMP(output->nmaster[t], 0, (1 << 16));
+            output->mfact[t] = o->mfact[t];
+            CLAMP(output->mfact[t], 0, 1);
+            output->layout[t] = (o->layout[t] == LAYOUT_TABBED) ? LAYOUT_TABBED : LAYOUT_TILE;
+        }
         output->seltag = o->seltag;
         output->tagmask = o->tagmask;
         wl_list_remove(&o->link);
@@ -151,7 +168,11 @@ void restart_axe(Seat *seat, Arg *arg) {
     } else {
         Output *output;
         wl_list_for_each(output, &axe.outputs, link) {
-            fprintf(f, "O %d %d %f %u %u\n", output_index_of(output), output->nmaster, output->mfact, output->seltag, output->tagmask);
+            fprintf(f, "O %d %u %u", output_index_of(output), output->seltag, output->tagmask);
+            for(int t = 0; t < TAG_COUNT; t++) fprintf(f, " %d", output->nmaster[t]);
+            for(int t = 0; t < TAG_COUNT; t++) fprintf(f, " %f", output->mfact[t]);
+            for(int t = 0; t < TAG_COUNT; t++) fprintf(f, " %d", (int) output->layout[t]);
+            fprintf(f, "\n");
         }
 
         Window *window;

@@ -125,6 +125,10 @@ void window_set_dimensions(Window *window, int width, int height) {
 #define CHAN32(c) ((uint32_t)(c) * 0x01010101u)
 
 void render_window(Window *window) {
+    if(window->mon == NULL) {
+        river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
+        return;
+    }
     if(window->floating || window->sticky) {
         river_window_v1_set_borders(window->river_window,
                                     RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM |
@@ -134,7 +138,7 @@ void render_window(Window *window) {
         return;
     }
 
-    if(window->mon != NULL && window->mon->layout == LAYOUT_TABBED) {
+    if(window->mon != NULL && window->mon->layout[tagidx(window->mon)] == LAYOUT_TABBED) {
         river_window_v1_set_borders(window->river_window, RIVER_WINDOW_V1_EDGES_NONE, 0, 0, 0, 0, 0);
         return;
     }

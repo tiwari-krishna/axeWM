@@ -9,13 +9,33 @@
 #include <unistd.h>
 
 #include "axe.h"
-#include "config.h" // tab_* settings, bar_at_bottom (shared anchor edge)
+#include "config.h" // tab_* settings
 
 // i3-style tab strip for LAYOUT_TABBED outputs. Deliberately loads no
 // fonts of its own - fill_rect/measure_text_width/draw_text (exported
 // from bar.c) draw with whatever fonts bar_init() already loaded, so
 // tab labels render identically to the status bar with zero duplicate
 // FreeType setup here.
+
+// Mirrors bar.c's bar_visible: starts hidden if tab_autohide is on, and
+// is flipped by the shared Super-hold gesture (see bar_setup_seat_
+// autohide in bar.c) via tabbar_set_visible(). Unlike bar.c, showing/
+// hiding doesn't need its own imperative exclusive-zone/blank-buffer
+// dance here - redraw()'s existing `want` transition logic (already
+// needed for the layout and window-count edges) handles it for free,
+// since tab_visible is just one more input to `want` below.
+static bool tab_visible = true;
+
+void tabbar_init(void) {
+    tab_visible = !tab_autohide;
+}
+
+void tabbar_set_visible(bool visible) {
+    if(tab_visible == visible) return;
+    tab_visible = visible;
+    tabbar_redraw_all();
+}
+
 
 static void draw_blank(Output *o) {
     int w = o->tab_configured_w, h = o->tab_configured_h;
@@ -55,7 +75,10 @@ static void redraw(Output *o) {
     if(compositor == NULL || shm == NULL || wlr_layer_shell == NULL) return;
     if(o->wl_output == NULL) return;
 
-    bool want = (o->layout == LAYOUT_TABBED);
+    // Only actually want the strip up when this tag is in tabbed layout,
+    // there's more than one tiled window to switch between, AND (if
+    // tab_autohide is on) the reveal gesture currently has it shown.
+    bool want = (o->layout[tagidx(o)] == LAYOUT_TABBED) && count_tiled_windows(o) > 1 && tab_visible;
 
     if(o->tab_surface == NULL) {
         if(!want) return; // never needed yet - nothing to create
@@ -67,12 +90,10 @@ static void redraw(Output *o) {
         extern const struct zwlr_layer_surface_v1_listener tab_layer_surface_listener;
         zwlr_layer_surface_v1_add_listener(o->tab_layer_surface, &tab_layer_surface_listener, o);
 
-        // Same anchor edge as the main bar so the two exclusive zones
-        // stack adjacent to each other - wlroots accumulates zones on a
-        // shared edge in creation order, so the strip ends up sitting
-        // right between the status bar and the tiled windows.
+        // Anchor edge is independently configurable from the bar's via
+        // tab_at_bottom - doesn't need to match bar_at_bottom.
         uint32_t anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
-        anchor |= bar_at_bottom ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+        anchor |= tab_at_bottom ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
         zwlr_layer_surface_v1_set_anchor(o->tab_layer_surface, anchor);
         zwlr_layer_surface_v1_set_size(o->tab_layer_surface, 0, tab_height);
         zwlr_layer_surface_v1_set_exclusive_zone(o->tab_layer_surface, tab_height);

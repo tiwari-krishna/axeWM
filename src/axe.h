@@ -26,6 +26,7 @@
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define LENGTH(A) (sizeof A / sizeof A[0])
+#define TAG_COUNT 9
 #define ISVISIBLE(C) ((C) != NULL && (C)->mon != NULL && (((C)->tagmask & (C)->mon->tagmask) || (C)->sticky))
 #define CLAMP(VAL, MIN, MAX) VAL = VAL < MIN ? MIN : (VAL > MAX ? MAX : VAL)
 
@@ -93,8 +94,8 @@ struct Output {
     int nex_w;
     int nex_h;
 
-    int nmaster;
-    float mfact;
+    int nmaster[TAG_COUNT];
+    float mfact[TAG_COUNT];
 
     uint32_t seltag;
     uint32_t tagmask;
@@ -117,23 +118,35 @@ struct Output {
     uint32_t bar_last_seltag;
     uint32_t bar_last_status_epoch;
 
-    // Tiling layout for this output. LAYOUT_TILE (default, and what a
-    // fresh calloc'd Output gets - LAYOUT_TILE == 0) is the usual
-    // master/stack. LAYOUT_TABBED gives every tiled window the same
-    // full-size slot (no gaps/borders) and shows an i3-style tab strip
-    // instead - see tabbar.c. Toggled per-output with togglelayout.
-    Layout layout;
+    // Tiling layout, per-tag like nmaster/mfact above. LAYOUT_TILE
+    // (default, and what a fresh calloc'd Output gets - LAYOUT_TILE == 0)
+    // is the usual master/stack. LAYOUT_TABBED gives every tiled window
+    // the same full-size slot (no gaps/borders) and shows an i3-style tab
+    // strip instead - see tabbar.c. Toggled per-tag with togglelayout.
+    Layout layout[TAG_COUNT];
 
     // tabbar.c's own layer-shell surface - separate from bar_surface
-    // above, only reserved/shown while layout == LAYOUT_TABBED.
+    // above, only reserved/shown while the current tag's layout is
+    // LAYOUT_TABBED and there's more than one tiled window to tab
+    // between.
     struct wl_surface *tab_surface;
     struct zwlr_layer_surface_v1 *tab_layer_surface;
     struct wl_buffer *tab_buffer;
     int tab_configured_w, tab_configured_h;
     int tab_buf_w, tab_buf_h;
-    bool tab_last_layout; // was the strip showing last redraw - detects the TILE<->TABBED edge
+    bool tab_last_layout;
     uint32_t tab_last_hash; // cheap signature of what's drawn, to skip redundant redraws
 };
+
+// Index into an Output's per-tag nmaster/mfact/layout arrays for its
+// currently selected tag. o->seltag is expected to be a single bit (see
+// toggleview's "leftmost viewed tag" logic in actions.c) - defensively
+// falls back to tag 0 if it's ever 0 or out of TAG_COUNT.
+static inline int tagidx(Output *o) {
+    if(o == NULL || o->seltag == 0) return 0;
+    int i = __builtin_ctz(o->seltag);
+    return (i >= 0 && i < TAG_COUNT) ? i : 0;
+}
 
 struct Seat {
     struct river_seat_v1 *river_seat;
@@ -412,5 +425,7 @@ void tabbar_manager_ready(void);
 void tabbar_output_ready(Output *output);
 void tabbar_redraw_all(void);
 void tabbar_destroy(Output *output);
+void tabbar_init(void);
+void tabbar_set_visible(bool visible);
 
 #endif /* AXEH */

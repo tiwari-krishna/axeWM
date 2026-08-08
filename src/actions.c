@@ -206,16 +206,20 @@ void focus_prev(Seat *seat, Arg *arg) {
 
 void incnmaster(Seat *seat, Arg *arg) {
     if(seat->focused != NULL) {
-        seat->focused->mon->nmaster += arg->i;
-        CLAMP(seat->focused->mon->nmaster, 0, (1 << 16));
+        Output *mon = seat->focused->mon;
+        int t = tagidx(mon);
+        mon->nmaster[t] += arg->i;
+        CLAMP(mon->nmaster[t], 0, (1 << 16));
         river_window_manager_v1_manage_dirty(window_manager);
     }
 }
 
 void setmfact(Seat *seat, Arg *arg) {
     if(seat->focused != NULL) {
-        seat->focused->mon->mfact += arg->f;
-        CLAMP(seat->focused->mon->mfact, 0, 1);
+        Output *mon = seat->focused->mon;
+        int t = tagidx(mon);
+        mon->mfact[t] += arg->f;
+        CLAMP(mon->mfact[t], 0, 1);
         river_window_manager_v1_manage_dirty(window_manager);
     }
 }
@@ -276,7 +280,7 @@ void toggletag(Seat *seat, Arg *arg) {
 // participate in tiling order and are ignored.
 void movestack(Seat *seat, Arg *arg) {
     if(seat->focused == NULL || seat->focused->floating || seat->focused->sticky) return;
-    if(seat->focused->mon != NULL && seat->focused->mon->layout == LAYOUT_TABBED) return;
+    // if(seat->focused->mon != NULL && seat->focused->mon->layout == LAYOUT_TABBED) return;
 
     Window *other = adjacent_tiled(seat->focused, arg->i);
     if(other == NULL) return;
@@ -362,7 +366,8 @@ void togglesticky(Seat *seat, Arg *arg) {
 // as nmaster/mfact, so different monitors can run different layouts.
 void togglelayout(Seat *seat, Arg *arg) {
     if(selmon == NULL) return;
-    selmon->layout = (selmon->layout == LAYOUT_TABBED) ? LAYOUT_TILE : LAYOUT_TABBED;
+    int t = tagidx(selmon);
+    selmon->layout[t] = (selmon->layout[t] == LAYOUT_TABBED) ? LAYOUT_TILE : LAYOUT_TABBED;
     river_window_manager_v1_manage_dirty(window_manager);
 }
 
@@ -387,6 +392,7 @@ void movewin(Seat *seat, Arg *arg) {
 // Start an interactive resize of the hovered window via mouse drag. Only
 // affects floating windows, as asked.
 void resizewin(Seat *seat, Arg *arg) {
+    if(seat->op_window != NULL) return;
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
 

@@ -41,8 +41,9 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
     wl_list_for_each(output, &axe.outputs, link) {
         int i = 0;
         int n = count_tiled_windows(output);
-        int m = output->nmaster;
-        bool tabbed = output->layout == LAYOUT_TABBED;
+        int t = tagidx(output);
+        int m = output->nmaster[t];
+        bool tabbed = output->layout[t] == LAYOUT_TABBED;
 
         output->tiled_count = n;
 
@@ -58,7 +59,7 @@ void river_window_manager_v1_manage_start(void *data, struct river_window_manage
 
         // Window *prev = NULL;
         bool two = m < n && m != 0;
-        float mfact = two ? output->mfact : 1;
+        float mfact = two ? output->mfact[t] : 1;
         int master_w = (m == 0) ? 0 : (int) (area_w * mfact);
 
         int tile_inset = (tabbed || solo) ? 0 : (int) borderpx;

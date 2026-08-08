@@ -37,10 +37,13 @@ static const bool smart_gap  = false;
 static const int outer_gap   = 10;
 static const int inner_gap   = 5;
 
-/* tabbed layout (Super+t): gaps/borders are suppressed for that output
- * and every tiled window shares one full-size slot; an i3-style tab
- * strip lists them across the top (or bottom, matching bar_at_bottom),
- * drawn with the same font/rendering path as the status bar above. */
+/* tabbed layout (Super+Tab), per-tag: gaps/borders are suppressed for
+ * that tag and every tiled window shares one full-size slot; an i3-style
+ * tab strip lists them across the top or bottom (tab_at_bottom, separate
+ * from bar_at_bottom), drawn with the same font/rendering path as the
+ * status bar above. Only shown once there's more than one tiled window
+ * to switch between. */
+static const bool tab_at_bottom = false;
 static const int tab_height = 20;
 static const uint8_t tab_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xff };
 static const uint8_t tab_fg_color[4]     = { 0xd8, 0xde, 0xe9, 0xff };
@@ -56,6 +59,13 @@ static const char *bar_status_cmd = "stat-sway";
  * its screen space) on release. When false, use the togglebar keybind
  * below instead for a manual, persistent toggle. */
 static const bool bar_autohide = true;
+
+/* same idea as bar_autohide, but for the tab strip - independent switch,
+ * so you can e.g. autohide the bar but always keep tabs visible, or vice
+ * versa. Shares the same Super-hold gesture as the bar (see
+ * bar_setup_seat_autohide in bar.c) rather than a second one, so holding
+ * Super reveals whichever of the two have autohide enabled. */
+static const bool tab_autohide = true;
 
 /* keyboard layout - comma-separated, matches xkb_rule_names.layout/options */
 static const char *xkb_layout  = "us,np";

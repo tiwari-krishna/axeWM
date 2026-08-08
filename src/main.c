@@ -136,6 +136,7 @@ int main(int argc, char **argv) {
     xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
     bar_init();
+    tabbar_init();
 
     struct wl_display *display = wl_display_connect(NULL);
     if(display == NULL) {

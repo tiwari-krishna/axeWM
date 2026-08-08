@@ -156,8 +156,10 @@ const struct river_layer_shell_output_v1_listener layer_shell_output_listener = 
 void river_window_manager_v1_output(void *data, struct river_window_manager_v1 *obj, struct river_output_v1 *river_output) {
     Output *output = calloc(1, sizeof(Output));
     output->river_output = river_output;
-    output->nmaster = nmaster;
-    output->mfact = mfact;
+    for(int t = 0; t < TAG_COUNT; t++) {
+        output->nmaster[t] = nmaster;
+        output->mfact[t] = mfact;
+    }
     output->seltag = 1;
     output->tagmask = 1;
 

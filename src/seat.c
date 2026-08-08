@@ -164,7 +164,7 @@ void manage_seat(Seat *seat) {
         river_seat_v1_focus_window(seat->river_seat, seat->focused->river_window);
         // river_node_v1_place_top(seat->focused->river_node);
         if(seat->focused->floating || seat->focused->sticky || seat->focused->fullscreen ||
-            (seat->focused->mon != NULL && seat->focused->mon->layout == LAYOUT_TABBED)) {
+            (seat->focused->mon != NULL && seat->focused->mon->layout[tagidx(seat->focused->mon)] == LAYOUT_TABBED)) {
             river_node_v1_place_top(seat->focused->river_node);
         }
         if(seat->pending_warp && !seat->focused->floating && !seat->focused->sticky) {
