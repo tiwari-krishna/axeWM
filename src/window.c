@@ -191,6 +191,12 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
         }
     }
 
+     // Same reasoning, for harpoon-style marks - gotomark would otherwise
+     // read freed memory the next time this slot is jumped to.
+     for(int i = 0; i < MARK_COUNT; i++) {
+         if(axe.marks[i] == window) axe.marks[i] = NULL;
+     }
+
     river_node_v1_destroy(window->river_node);
     river_window_v1_destroy(window->river_window);
     wl_list_remove(&window->link);

@@ -14,6 +14,7 @@
 #include <poll.h>
 
 #include "axe.h"
+#define MAX_POLL_SEATS 8
 
 WindowManager axe;
 Output *selmon = NULL;
@@ -203,11 +204,36 @@ int main(int argc, char **argv) {
         }
 
         int status_fd = bar_status_fd();
-        struct pollfd fds[2] = {
-            { .fd = wl_display_get_fd(display), .events = POLLIN | (flush_incomplete ? POLLOUT : 0) },
-            { .fd = status_fd, .events = POLLIN },
-        };
-        nfds_t nfds = status_fd >= 0 ? 2 : 1;
+        // wl_display + bar status pipe + up to MAX_POLL_SEATS cursor-check
+        // timers (one per Seat, see cursor.c) - MAX_POLL_SEATS is generous
+        // headroom for any real multi-seat setup, not a hard assumption
+        // there's only ever one.
+        struct pollfd fds[2 + MAX_POLL_SEATS];
+        Seat *fd_seat[2 + MAX_POLL_SEATS] = {0}; // NULL for non-seat-timer slots
+        nfds_t nfds = 0;
+
+        nfds_t idx_display = nfds;
+        fds[nfds].fd = wl_display_get_fd(display);
+        fds[nfds].events = POLLIN | (flush_incomplete ? POLLOUT : 0);
+        nfds++;
+
+        int idx_status = -1;
+        if(status_fd >= 0) {
+            idx_status = (int) nfds;
+            fds[nfds].fd = status_fd;
+            fds[nfds].events = POLLIN;
+            nfds++;
+        }
+
+        Seat *seat;
+        wl_list_for_each(seat, &axe.seats, link) {
+            int tfd = cursor_seat_timer_fd(seat);
+            if(tfd < 0 || nfds >= LENGTH(fds)) continue;
+            fds[nfds].fd = tfd;
+            fds[nfds].events = POLLIN;
+            fd_seat[nfds] = seat;
+            nfds++;
+        }
 
         if(poll(fds, nfds, -1) < 0) {
             fprintf(stderr, "dispatch failed\n");
@@ -217,9 +243,9 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        if(fds[0].revents & POLLOUT) wl_display_flush(display);
+        if(fds[idx_display].revents & POLLOUT) wl_display_flush(display);
 
-        if(fds[0].revents & POLLIN) {
+        if(fds[idx_display].revents & POLLIN) {
             wl_display_read_events(display);
         } else {
             wl_display_cancel_read(display);
@@ -230,8 +256,13 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        if(nfds == 2 && (fds[1].revents & (POLLIN | POLLHUP))) {
+        if(idx_status >= 0 && (fds[idx_status].revents & (POLLIN | POLLHUP))) {
             bar_status_readable();
+        }
+        for(nfds_t i = 0; i < nfds; i++) {
+            if(fd_seat[i] != NULL && (fds[i].revents & POLLIN)) {
+                cursor_timer_fired(fd_seat[i]);
+            }
         }
     }
 

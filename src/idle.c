@@ -24,6 +24,8 @@
 typedef struct {
     uint32_t name;
     struct wl_seat *wl_seat;
+    struct wl_pointer *wl_pointer;
+    Seat *resolved_seat;
     struct wl_list link;
 } PendingSeat;
 
@@ -50,11 +52,35 @@ static void ensure_lists(void) {
     lists_initialized = true;
 }
 
+static void pending_seat_capabilities(void *data, struct wl_seat *wlseat, uint32_t caps) {
+    PendingSeat *p = data;
+    // Write straight into the real Seat once resolved (so a later
+    // capability change, e.g. a mouse getting unplugged/replugged,
+    // still works correctly) - otherwise stash it here for
+    // idle_attach_wl_seat to pick up.
+    struct wl_pointer **slot = p->resolved_seat ? &p->resolved_seat->wl_pointer : &p->wl_pointer;
+
+    if((caps & WL_SEAT_CAPABILITY_POINTER) && *slot == NULL) {
+        *slot = wl_seat_get_pointer(wlseat);
+    } else if(!(caps & WL_SEAT_CAPABILITY_POINTER) && *slot != NULL) {
+        wl_pointer_destroy(*slot);
+        *slot = NULL;
+    }
+}
+
+static void pending_seat_name(void *data, struct wl_seat *wlseat, const char *name) {}
+
+static const struct wl_seat_listener pending_seat_listener = {
+    .capabilities = pending_seat_capabilities,
+    .name = pending_seat_name,
+};
+
 void idle_track_wl_seat(struct wl_registry *registry, uint32_t name) {
     ensure_lists();
     PendingSeat *p = calloc(1, sizeof(PendingSeat));
     p->name = name;
     p->wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+    wl_seat_add_listener(p->wl_seat, &pending_seat_listener, p);
     wl_list_insert(&pending_seats, &p->link);
 }
 
@@ -150,8 +176,9 @@ void idle_attach_wl_seat(Seat *seat, uint32_t name) {
     wl_list_for_each_safe(p, tmp, &pending_seats, link) {
         if(p->name != name) continue;
         seat->wl_seat = p->wl_seat;
+        seat->wl_pointer = p->wl_pointer;
+        p->resolved_seat = seat;
         wl_list_remove(&p->link);
-        free(p);
         break;
     }
     setup_seat_idle(seat);

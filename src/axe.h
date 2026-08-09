@@ -27,6 +27,7 @@
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define LENGTH(A) (sizeof A / sizeof A[0])
 #define TAG_COUNT 9
+#define MARK_COUNT 5
 #define ISVISIBLE(C) ((C) != NULL && (C)->mon != NULL && (((C)->tagmask & (C)->mon->tagmask) || (C)->sticky))
 #define CLAMP(VAL, MIN, MAX) VAL = VAL < MIN ? MIN : (VAL > MAX ? MAX : VAL)
 
@@ -174,11 +175,39 @@ struct Seat {
     int pointer_x, pointer_y;
     bool pending_warp;
 
+    // Set alongside pending_warp only by gotomark - bypasses the
+    // floating/sticky exclusion in manage_seat()'s warp so a mark warps
+    // to its window regardless of state. Every other pending_warp site
+    // (focus_next/prev, movestack, zoom, movemon) leaves this false and
+    // keeps its existing behavior unchanged.
+    bool pending_warp_any_state;
+
     // For idle.c only - obtained via the river_seat_v1.wl_seat event.
     struct wl_seat *wl_seat;
     bool idle_setup_done;
     struct wl_list idle_watchers;
     struct ext_idle_notification_v1 *display_notification;
+
+    // For cursor.c only - hide the pointer after N ms with no mouse
+    // movement specifically (see cursor.c's top comment for exactly how
+    // "no movement" is detected and why). wl_pointer is acquired eagerly
+    // by idle.c's PendingSeat handling (see the comment there for why -
+    // in short, attaching a capabilities listener late enough to learn
+    // this Seat's identity first would miss the compositor's one-shot
+    // initial capabilities burst) - cursor.c only consumes it.
+    // cursor_check_timer_fd is a small dedicated timerfd (independent of
+    // any Wayland event) polled from main.c. pending_cursor_hide/show
+    // are consumed by cursor_apply_seat(), called from manage_seat()
+    // every manage sequence - see cursor.c's top comment for why this
+    // can't just act directly wherever motion (or its absence) is
+    // detected. cursor_hidden tracks whether the currently-open op (if
+    // any) is one we ourselves started for this, as opposed to a real
+    // movewin/resizewin drag.
+    struct wl_pointer *wl_pointer;
+    int cursor_check_timer_fd;
+    int64_t cursor_last_motion_ms;
+    bool pending_cursor_hide, pending_cursor_show;
+    bool cursor_hidden;
 };
 
 typedef struct {
@@ -187,6 +216,11 @@ typedef struct {
     struct wl_list seats;
     struct wl_list keyboards;
     struct wl_list libinput_devices;
+    // Weak references, nvHopper-style - a window in any state (tiled,
+    // floating, sticky, fullscreen, on any tag/monitor). Slot i is
+    // cleared automatically when that window closes (see window.c's
+    // river_window_v1_closed) so this can never dangle.
+    Window *marks[MARK_COUNT];
 } WindowManager;
 
 typedef union {
@@ -408,6 +442,16 @@ void idle_power_manager_ready(void);
 void idle_registry_global_remove(uint32_t name);
 
 // ---------------------------------------------------------------------
+// cursor.c - hide the pointer cursor after N ms with no mouse movement
+// ---------------------------------------------------------------------
+void cursor_attach_wl_seat(Seat *seat);
+void cursor_teardown_seat(Seat *seat);
+int cursor_seat_timer_fd(Seat *seat);
+void cursor_pointer_moved(Seat *seat);
+void cursor_timer_fired(Seat *seat);
+void cursor_apply_seat(Seat *seat);
+
+// ---------------------------------------------------------------------
 // bar.c - status bar (tags + one-shot status command) via wlr-layer-shell
 // ---------------------------------------------------------------------
 void bar_init(void);
@@ -433,5 +477,7 @@ void tabbar_init(void);
 void tabbar_set_visible(bool visible);
 void tabselect(Seat *seat, Arg *arg);
 void togglepassthrough(Seat *seat, Arg *arg);
+void markwindow(Seat *seat, Arg *arg);
+void gotomark(Seat *seat, Arg *arg);
 
 #endif /* AXEH */

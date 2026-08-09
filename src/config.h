@@ -146,6 +146,12 @@ static const IdleTimeout idle_timeouts[] = {
  * after this many ms idle, back on on resume. 0 or negative disables. */
 static const int display_off_timeout_ms = 60000;
 
+/* hide the pointer cursor after this many ms with no *mouse movement*
+ * specifically - keyboard-only activity does not reset this, unlike
+ * display_off_timeout_ms above. Shown again the instant the mouse
+ * actually moves. See cursor.c. 0 or negative disables. */
+static const int cursor_hide_timeout_ms = 3000;
+
 #define TAGKEY(KEY,TAG) \
 {SUPER,               KEY, view,       { .u = 1 << TAG } }, \
     {SUPER|CONTROL,       KEY, toggleview, { .u = 1 << TAG } }, \
@@ -155,7 +161,11 @@ static const int display_off_timeout_ms = 60000;
 // Jump straight to the Nth tab (1-9)
 // TAGKEY above (toggleview), SUPER+ALT
 #define TABKEY(KEY,N) \
-{SUPER|ALT, KEY, tabselect, { .i = N } },
+{CONTROL, KEY, tabselect, { .i = N } },
+
+#define MARKKEY(KEY,N) \
+{ALT,       KEY, gotomark,   { .i = N } }, \
+    {ALT|SHIFT, KEY, markwindow, { .i = N } },
 
 static const char *termcmd[] = { "footclient", NULL };
 static const char *launchercmd[] = { "fuzzel", NULL };
@@ -323,6 +333,12 @@ static Keys keybinds[] = {
     TABKEY(XKB_KEY_7, 7)
     TABKEY(XKB_KEY_8, 8)
     TABKEY(XKB_KEY_9, 9)
+
+    MARKKEY(XKB_KEY_q, 0)
+    MARKKEY(XKB_KEY_w, 1)
+    MARKKEY(XKB_KEY_e, 2)
+    MARKKEY(XKB_KEY_r, 3)
+    MARKKEY(XKB_KEY_t, 4)
 };
 
 static Mousebinds mousebinds[] = {

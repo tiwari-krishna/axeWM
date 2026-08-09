@@ -299,6 +299,46 @@ void togglepassthrough(Seat *seat, Arg *arg) {
     }
 }
 
+// nvHopper-style marks: mark the focused window into slot arg->i,
+// overwriting whatever was there. Silently does nothing without a
+// focused window, or with an out-of-range slot.
+void markwindow(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL || arg->i < 0 || arg->i >= MARK_COUNT) return;
+    axe.marks[arg->i] = seat->focused;
+}
+
+// Jump straight to whatever window is marked in slot arg->i, regardless
+// of which monitor, tag, or state (tiled/floating/fullscreen/sticky)
+// it's currently in. Brings the target monitor's selected tag onto
+// whichever of the window's own tags is lowest-numbered (same "leftmost
+// viewed tag" convention as toggleview - a no-op for sticky windows,
+// already visible on every tag), focuses it, and warps the cursor there
+// once the layout settles.
+void gotomark(Seat *seat, Arg *arg) {
+    if(arg->i < 0 || arg->i >= MARK_COUNT) return;
+
+    Window *w = axe.marks[arg->i];
+    if(w == NULL || w->mon == NULL) return;
+
+    if(!w->sticky) {
+        uint32_t tag = w->tagmask & -w->tagmask; // lowest set bit
+        if(tag == 0) tag = 1; // defensive - a window should always have one
+        w->mon->seltag = tag;
+        w->mon->tagmask = tag;
+    }
+
+    selmon = w->mon;
+    set_focus(seat, w);
+
+    // See pending_warp_any_state's comment in axe.h - a mark can land on
+    // a floating/sticky/fullscreen window, unlike the other pending_warp
+    // call sites, so it needs to bypass their floating/sticky exclusion.
+    seat->pending_warp = true;
+    seat->pending_warp_any_state = true;
+
+    river_window_manager_v1_manage_dirty(window_manager);
+}
+
 void toggleview(Seat *seat, Arg *arg) {
     if(selmon == NULL) return;
 
@@ -443,6 +483,20 @@ void movewin(Seat *seat, Arg *arg) {
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
 
+    // If our own cursor-hide op is currently open, end it first,
+    // synchronously, before starting the real one below - river only
+    // allows one op per seat, and unlike the old ext-idle-notify-based
+    // design, there's no async event to race against here since this
+    // button press is itself real pointer motion (op_delta would also
+    // see it) - but ending our op explicitly rather than waiting for
+    // that to be noticed keeps this deterministic regardless. Wayland
+    // preserves per-connection request ordering, so the compositor
+    // always sees our op_end before this op_start_pointer.
+    if(seat->cursor_hidden) {
+        river_seat_v1_op_end(seat->river_seat);
+        seat->cursor_hidden = false;
+    }
+
     seat->op_window = w;
     seat->op_mode = 0;
     seat->op_orig_x = w->floatx;
@@ -458,6 +512,12 @@ void resizewin(Seat *seat, Arg *arg) {
     if(seat->op_window != NULL) return;
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
+
+    // See the matching comment in movewin() just above.
+    if(seat->cursor_hidden) {
+        river_seat_v1_op_end(seat->river_seat);
+        seat->cursor_hidden = false;
+    }
 
     seat->op_window = w;
     seat->op_mode = 1;

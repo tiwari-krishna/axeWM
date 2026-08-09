@@ -21,6 +21,7 @@ void river_seat_v1_removed(void *data, struct river_seat_v1 *obj) {
     }
 
     idle_teardown_seat(seat);
+    cursor_teardown_seat(seat);
 
     river_seat_v1_destroy(seat->river_seat);
     wl_list_remove(&seat->link);
@@ -29,6 +30,7 @@ void river_seat_v1_removed(void *data, struct river_seat_v1 *obj) {
 
 void river_seat_v1_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {
     idle_attach_wl_seat((Seat *) data, id);
+    cursor_attach_wl_seat((Seat *) data);
 }
 
 void river_seat_v1_pointer_enter(void *data, struct river_seat_v1 *obj, struct river_window_v1 *river_window) {
@@ -61,7 +63,16 @@ void river_seat_v1_shell_surface_interaction(void *data, struct river_seat_v1 *o
 
 void river_seat_v1_op_delta(void *data, struct river_seat_v1 *obj, int32_t dx, int32_t dy) {
     Seat *seat = data;
-    if(seat->op_window == NULL) return;
+    if(seat->op_window == NULL) {
+        // Not a real move/resize drag - if our own cursor-hide op is
+        // what's currently open, this is unambiguous, protocol-
+        // confirmed pointer motion (op_delta fires purely "based on
+        // pointer input", no button required - see cursor.c's top
+        // comment), so treat it as "show the cursor again."
+        if(seat->cursor_hidden) cursor_pointer_moved(seat);
+        return;
+    }
+
     Window *ow = seat->op_window;
 
     if(seat->op_mode == 0) { // move
@@ -105,6 +116,7 @@ void river_seat_v1_pointer_position(void *data, struct river_seat_v1 *obj, int32
     Seat *seat = data;
     seat->pointer_x = x;
     seat->pointer_y = y;
+    cursor_pointer_moved(seat);
 
     if(seat->op_window != NULL) return;
 
@@ -148,6 +160,8 @@ void manage_seat(Seat *seat) {
         seat->op_ending = false;
     }
 
+    cursor_apply_seat(seat);
+
     if(seat->focused == NULL || !ISVISIBLE(seat->focused)) {
         Window *found = NULL;
 
@@ -184,15 +198,28 @@ void manage_seat(Seat *seat) {
             (seat->focused->mon != NULL && seat->focused->mon->layout[tagidx(seat->focused->mon)] == LAYOUT_TABBED)) {
             river_node_v1_place_top(seat->focused->river_node);
         }
-        if(seat->pending_warp && !seat->focused->floating && !seat->focused->sticky) {
-            river_seat_v1_pointer_warp(seat->river_seat,
-                                       seat->focused->x + seat->focused->width/2,
-                                       seat->focused->y + seat->focused->height/2);
+        if(seat->pending_warp && (seat->pending_warp_any_state || (!seat->focused->floating && !seat->focused->sticky))) {
+            Window *w = seat->focused;
+            int cx, cy;
+            if(w->fullscreen && w->mon != NULL) {
+                // wm.c never calls window_set_position/window_set_dimensions
+                // for fullscreen windows (it just tells the compositor to
+                // fullscreen it and leaves the geometry to it) - w->x/y are
+                // stale leftovers from before it went fullscreen. Warp to
+                // the output's center instead.
+                cx = w->mon->nex_x + w->mon->nex_w / 2;
+                cy = w->mon->nex_y + w->mon->nex_h / 2;
+            } else {
+                cx = w->x + w->width / 2;
+                cy = w->y + w->height / 2;
+            }
+            river_seat_v1_pointer_warp(seat->river_seat, cx, cy);
         }
     } else {
         river_seat_v1_clear_focus(seat->river_seat);
     }
     seat->pending_warp = false;
+    seat->pending_warp_any_state = false;
 }
 
 void render_seat(Seat *seat) {}
@@ -216,6 +243,7 @@ void river_window_manager_v1_seat(void *data, struct river_window_manager_v1 *ob
     seat->river_seat = river_seat;
     seat->focused = NULL;
     seat->hovered = NULL;
+    seat->cursor_check_timer_fd = -1; // 0 from calloc would look like a valid fd (stdin)
 
     wl_list_init(&seat->keys);
     wl_list_init(&seat->buttons);
