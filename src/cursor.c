@@ -51,10 +51,13 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
+
+#include <wayland-cursor.h>
 
 #include "axe.h"
 #include "config.h"
@@ -147,6 +150,75 @@ void cursor_timer_fired(Seat *seat) {
 // from a genuinely valid context.
 // --------------------------------------------------------------------
 
+// --------------------------------------------------------------------
+// A real "default" cursor image, loaded once and reused forever - see
+// cursor_apply_seat()'s show path for why this exists at all: ending our
+// op only hands cursor control back to whatever *window* is under the
+// pointer, which is a no-op over empty desktop (there's no window to
+// hand it to). Per river_seat_v1's own description, "the most recent
+// cursor surface/shape set by the window manager is remembered by the
+// compositor and restored whenever no client has pointer focus" - and
+// that's true continuously over empty desktop, not just during our op.
+// So if the last thing we ever set was a NULL (hidden) cursor, empty
+// desktop stays permanently invisible from that point on, regardless of
+// our own op state. Setting a real image back before every show fixes
+// that at the source.
+// --------------------------------------------------------------------
+
+static struct wl_cursor_theme *default_cursor_theme;
+static struct wl_surface *default_cursor_surface;
+static int32_t default_cursor_hotspot_x, default_cursor_hotspot_y;
+static bool default_cursor_ready = false;
+static bool default_cursor_load_attempted = false;
+
+static void ensure_default_cursor(void) {
+    if(default_cursor_ready || default_cursor_load_attempted) return;
+    if(compositor == NULL || shm == NULL) return; // not bound yet - retry next call
+
+    default_cursor_load_attempted = true;
+
+    // Honor the user's own cursor theme/size settings rather than always
+    // rendering some arbitrary fixed look, same as any normal Wayland
+    // client loading its own cursor would.
+    const char *theme_name = getenv("XCURSOR_THEME"); // NULL is fine - falls back to the theme's own default
+    int size = 24;
+    const char *size_env = getenv("XCURSOR_SIZE");
+    if(size_env != NULL) {
+        int parsed = atoi(size_env);
+        if(parsed > 0) size = parsed;
+    }
+
+    default_cursor_theme = wl_cursor_theme_load(theme_name, size, shm);
+    if(default_cursor_theme == NULL) {
+        fprintf(stderr, "cursor: failed to load a cursor theme - the "
+                         "pointer may stay hidden over empty desktop "
+                         "after the first hide.\n");
+        return;
+    }
+
+    struct wl_cursor *wlcursor = wl_cursor_theme_get_cursor(default_cursor_theme, "default");
+    if(wlcursor == NULL) wlcursor = wl_cursor_theme_get_cursor(default_cursor_theme, "left_ptr");
+    if(wlcursor == NULL || wlcursor->image_count == 0) {
+        fprintf(stderr, "cursor: theme has neither 'default' nor "
+                         "'left_ptr' - the pointer may stay hidden over "
+                         "empty desktop after the first hide.\n");
+        return;
+    }
+
+    struct wl_cursor_image *image = wlcursor->images[0];
+    struct wl_buffer *buffer = wl_cursor_image_get_buffer(image);
+    if(buffer == NULL) return;
+
+    default_cursor_surface = wl_compositor_create_surface(compositor);
+    wl_surface_attach(default_cursor_surface, buffer, 0, 0);
+    wl_surface_damage(default_cursor_surface, 0, 0, (int32_t) image->width, (int32_t) image->height);
+    wl_surface_commit(default_cursor_surface);
+
+    default_cursor_hotspot_x = (int32_t) image->hotspot_x;
+    default_cursor_hotspot_y = (int32_t) image->hotspot_y;
+    default_cursor_ready = true;
+}
+
 void cursor_apply_seat(Seat *seat) {
     if(seat->pending_cursor_hide) {
         seat->pending_cursor_hide = false;
@@ -178,6 +250,16 @@ void cursor_apply_seat(Seat *seat) {
         // Only end an op we ourselves started for this - never touch a
         // real move/resize op, and never double-end.
         if(seat->cursor_hidden) {
+            ensure_default_cursor();
+            if(seat->wl_pointer != NULL && default_cursor_ready) {
+                // Same "serial is ignored for WM-issued calls" rule as
+                // the hide path - restores a real image so the
+                // compositor's remembered WM cursor is never left at
+                // NULL once we're done here.
+                wl_pointer_set_cursor(seat->wl_pointer, 0, default_cursor_surface,
+                                       default_cursor_hotspot_x, default_cursor_hotspot_y);
+            }
+
             river_seat_v1_op_end(seat->river_seat);
             seat->cursor_hidden = false;
         }
