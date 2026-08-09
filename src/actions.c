@@ -1,0 +1,366 @@
+#include <stdlib.h>
+#include <unistd.h>
+
+#include "axe.h"
+
+// Swap the positions of two nodes in a wl_list (handles both the adjacent
+// and non-adjacent cases). Used to swap a window's place in the tiling
+// order without changing the identity of either Window struct, so any
+// existing Window* pointers (seat->focused, seat->hovered, etc.) held
+// elsewhere stay valid.
+void list_swap(struct wl_list *x, struct wl_list *y) {
+    if(x == y) return;
+
+    // normalize so that if the nodes are adjacent, x comes right before y
+    if(y->next == x) {
+        struct wl_list *t = x;
+        x = y;
+        y = t;
+    }
+
+    if(x->next == y) {
+        struct wl_list *x_prev = x->prev;
+        struct wl_list *y_next = y->next;
+
+        x_prev->next = y; y->prev = x_prev;
+        y->next = x;      x->prev = y;
+        x->next = y_next; y_next->prev = x;
+    } else {
+        struct wl_list *x_prev = x->prev, *x_next = x->next;
+        struct wl_list *y_prev = y->prev, *y_next = y->next;
+
+        x_prev->next = y; y->prev = x_prev;
+        y->next = x_next; x_next->prev = y;
+        y_prev->next = x; x->prev = y_prev;
+        x->next = y_next; y_next->prev = x;
+    }
+}
+
+// Find the next (dir > 0) or previous (dir < 0) window that is tiled
+// (not floating) and visible on the same output as `w`. Returns NULL if
+// there is none.
+Window *adjacent_tiled(Window *w, int dir) {
+    struct wl_list *node = &w->link;
+
+    for(;;) {
+        node = dir > 0 ? node->next : node->prev;
+        if(node == &axe.windows) {
+            node = dir > 0 ? node->next : node->prev;
+        }
+        if(node == &w->link) return NULL;
+
+        Window *cand = wl_container_of(node, cand, link);
+        if(cand->mon == w->mon && !cand->floating && ISVISIBLE(cand)) return cand;
+    }
+}
+
+// Find the next (dir > 0) or previous (dir < 0) window visible on the
+// same output/tag as `w` - tiled or floating both count. Returns NULL if
+// there is none. Naturally wraps around to the first match if `w` is the
+// last one, since it keeps walking the circular list until it either
+// finds a match or comes back around to `w` itself.
+Window *adjacent_visible(Window *w, int dir) {
+    struct wl_list *node = &w->link;
+
+    for(;;) {
+        node = dir > 0 ? node->next : node->prev;
+        if(node == &axe.windows) {
+            node = dir > 0 ? node->next : node->prev;
+        }
+        if(node == &w->link) return NULL;
+
+        Window *cand = wl_container_of(node, cand, link);
+        if(cand->mon == w->mon && ISVISIBLE(cand)) return cand;
+    }
+}
+
+// Single place that changes which window a seat considers focused. Keeps
+// the focused-boolean (used e.g. for border color) consistent regardless
+// of whether the change came from a click, a keybind, a hover, or an
+// automatic refocus - all of those previously updated seat->focused
+// directly without touching the boolean, which made border color
+// accurate only right after a real mouse click.
+void set_focus(Seat *seat, Window *window) {
+    if(seat->focused == window) return;
+
+    if(seat->focused != NULL) seat->focused->focused = false;
+    seat->focused = window;
+    if(window != NULL) window->focused = true;
+}
+
+// Give a window a default centered floating geometry, if it doesn't
+// already have one remembered.
+void float_default_geometry(Window *w) {
+    // if(w->floatw != 0 || w->floath != 0) return;
+    //
+    // w->floatw = w->mon->nex_w * 6 / 10;
+    // w->floath = w->mon->nex_h * 6 / 10;
+    // w->floatx = (w->mon->nex_w - w->floatw) / 2;
+    // w->floaty = (w->mon->nex_h - w->floath) / 2;
+    if(w->floatw != 0 || w->floath != 0) return;
+
+    // Default to the window's own current/natural content size (e.g.
+    // mpv's native video resolution) instead of an arbitrary fraction of
+    // the screen, clamped so it can never exceed the monitor's usable
+    // area, and centered. If this runs before the window's real size is
+    // known, river_window_v1_dimensions() below corrects it once it
+    // arrives - still before the window is ever displayed.
+    w->floatw = w->width;
+    w->floath = w->height;
+
+    clamp_float_geometry(w, w->mon);
+
+    w->floatx = (w->mon->nex_w - w->floatw) / 2;
+    w->floaty = (w->mon->nex_h - w->floath) / 2;
+}
+
+// Clamp a window's remembered floating geometry (size and position) to
+// fit within mon's usable area - needed whenever a window ends up on a
+// monitor other than the one its floatx/y/w/h were computed for (rules,
+// movemon, an output disappearing) since that monitor may differ in size.
+void clamp_float_geometry(Window *w, Output *mon) {
+    if(mon->nex_w <= 0 || mon->nex_h <= 0) return;
+
+    if(w->floatw > mon->nex_w) w->floatw = mon->nex_w;
+    if(w->floath > mon->nex_h) w->floath = mon->nex_h;
+    if(w->floatw < 1) w->floatw = 1;
+    if(w->floath < 1) w->floath = 1;
+
+    if(w->floatx + w->floatw > mon->nex_w) w->floatx = mon->nex_w - w->floatw;
+    if(w->floaty + w->floath > mon->nex_h) w->floaty = mon->nex_h - w->floath;
+    if(w->floatx < 0) w->floatx = 0;
+    if(w->floaty < 0) w->floaty = 0;
+}
+
+// include config.h for definition of keybinds/mousebinds/autostart, and
+// the constants (nmaster, mfact, ...) referenced below.
+#include "config.h"
+
+// Run every command in config.h's autostart table once at startup. Each
+// row is a NULL-terminated argv list; a row whose first element is NULL
+// marks the end of the table.
+void run_autostart(void) {
+    for(int i = 0; autostart[i][0] != NULL; i++) {
+        if(fork() == 0) execvp(autostart[i][0], (char **) autostart[i]);
+    }
+}
+
+void destroy_window(Seat *seat, Arg *arg) {
+    if(seat->focused != NULL) {
+        river_window_v1_close(seat->focused->river_window);
+    }
+}
+
+void select_next_mon(Seat *seat, Arg *arg) {
+    if(selmon != NULL) {
+        Output *next = wl_container_of(selmon->link.next, selmon, link);
+        if(next != NULL && &next->link != &axe.outputs) {
+            selmon = next;
+            river_seat_v1_pointer_warp(seat->river_seat, selmon->x + selmon->width/2, selmon->y + selmon->height/2);
+        }
+    }
+}
+
+void select_prev_mon(Seat *seat, Arg *arg) {
+    if(selmon != NULL) {
+        Output *prev = wl_container_of(selmon->link.prev, selmon, link);
+        if(prev != NULL && &prev->link != &axe.outputs) {
+            selmon = prev;
+            river_seat_v1_pointer_warp(seat->river_seat, selmon->x + selmon->width/2, selmon->y + selmon->height/2);
+        }
+    }
+}
+
+void movemon(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+
+    Window *w = seat->focused;
+    struct wl_list *node = arg->i > 0 ? w->mon->link.next : w->mon->link.prev;
+    if(node == &axe.outputs) return;
+
+    Output *target = wl_container_of(node, target, link);
+    if(target == w->mon) return;
+
+    w->mon = target;
+    clamp_float_geometry(w, target);
+
+    selmon = target;
+    river_seat_v1_pointer_warp(seat->river_seat, selmon->x + selmon->width/2, selmon->y + selmon->height/2);
+}
+
+void focus_next(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+
+    Window *next = adjacent_visible(seat->focused, +1);
+    if(next != NULL) {
+        set_focus(seat, next);
+        river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
+    }
+}
+
+void focus_prev(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+
+    Window *prev = adjacent_visible(seat->focused, -1);
+    if(prev != NULL) {
+        set_focus(seat, prev);
+        river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
+    }
+}
+
+void incnmaster(Seat *seat, Arg *arg) {
+    if(seat->focused != NULL) {
+        seat->focused->mon->nmaster += arg->i;
+        CLAMP(seat->focused->mon->nmaster, 0, (1 << 16));
+    }
+}
+
+void setmfact(Seat *seat, Arg *arg) {
+    if(seat->focused != NULL) {
+        seat->focused->mon->mfact += arg->f;
+        CLAMP(seat->focused->mon->mfact, 0, 1);
+    }
+}
+
+void view(Seat *seat, Arg *arg) {
+    if(selmon != NULL) {
+        selmon->seltag = arg->u;
+        selmon->tagmask = arg->u;
+    }
+}
+
+void toggleview(Seat *seat, Arg *arg) {
+    if(selmon == NULL) return;
+
+    // FIX: the previous version XORed the bit off and then, if that made
+    // tagmask == 0, immediately reset tagmask back to selmon->seltag -
+    // which at that point is still the exact bit that was just removed.
+    // The net effect was a silent no-op instead of "keep at least one tag
+    // visible": toggling off the only viewed tag appeared to do nothing.
+    // Make that explicit: refuse to toggle off the last visible tag.
+    uint32_t new_mask = selmon->tagmask ^ arg->u;
+    if(new_mask == 0) return;
+
+    selmon->tagmask = new_mask;
+
+    // If current selected tag is toggled off, select leftmost viewed tag
+    if(arg->u == selmon->seltag) {
+        selmon->seltag = selmon->tagmask & -selmon->tagmask;
+    }
+}
+
+void tag(Seat *seat, Arg *arg) {
+    if(seat->focused != NULL) {
+        seat->focused->tagmask = arg->u;
+    }
+}
+
+void toggletag(Seat *seat, Arg *arg) {
+    if(seat->focused != NULL) {
+        seat->focused->tagmask ^= arg->u;
+
+        if(seat->focused->tagmask == 0) {
+            seat->focused->tagmask = selmon->seltag;
+        }
+    }
+}
+
+// Swap the focused window's place in the master/stack order with its
+// neighbor (arg->i == +1 for next, -1 for prev). Floating windows don't
+// participate in tiling order and are ignored.
+void movestack(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL || seat->focused->floating) return;
+
+    Window *other = adjacent_tiled(seat->focused, arg->i);
+    if(other == NULL) return;
+
+    river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
+    list_swap(&seat->focused->link, &other->link);
+
+}
+
+// Swap the focused window into the master slot. If it is already the
+// master, swap it with the next tiled window instead (classic dwm zoom).
+void zoom(Seat *seat, Arg *arg) {
+    Window *w = seat->focused;
+    if(w == NULL || w->floating) return;
+
+    Window *master = NULL;
+    Window *iter;
+    wl_list_for_each(iter, &axe.windows, link) {
+        if(iter->mon == w->mon && ISVISIBLE(iter) && !iter->floating) {
+            master = iter;
+            break;
+        }
+    }
+
+    if(master == NULL || master == w) {
+        Window *other = adjacent_tiled(w, +1);
+        if(other != NULL) list_swap(&w->link, &other->link);
+        return;
+    }
+
+    list_swap(&w->link, &master->link);
+}
+
+// Toggle the focused window between tiled and floating. Floating windows
+// keep their own remembered geometry, defaulted to a centered box the
+// first time a window floats.
+void togglefloating(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+
+    Window *w = seat->focused;
+    w->floating = !w->floating;
+
+    if(w->floating) float_default_geometry(w);
+}
+
+void togglefullscreen(Seat *seat, Arg *arg) {
+    if(seat->focused == NULL) return;
+    seat->focused->fullscreen = !seat->focused->fullscreen;
+}
+
+// Start an interactive move of the hovered window via mouse drag. Only
+// affects floating windows, as asked - tiled windows don't drag.
+void movewin(Seat *seat, Arg *arg) {
+    Window *w = seat->hovered;
+    if(w == NULL || !w->floating) return;
+
+    seat->op_window = w;
+    seat->op_mode = 0;
+    seat->op_orig_x = w->floatx;
+    seat->op_orig_y = w->floaty;
+    river_seat_v1_op_start_pointer(seat->river_seat);
+}
+
+// Start an interactive resize of the hovered window via mouse drag. Only
+// affects floating windows, as asked.
+void resizewin(Seat *seat, Arg *arg) {
+    Window *w = seat->hovered;
+    if(w == NULL || !w->floating) return;
+
+    seat->op_window = w;
+    seat->op_mode = 1;
+    seat->op_orig_x = w->floatx;
+    seat->op_orig_y = w->floaty;
+    seat->op_orig_w = w->floatw;
+    seat->op_orig_h = w->floath;
+
+    // Which corner was grabbed determines which edges move: the
+    // left/top half of the window anchors the opposite (right/bottom)
+    // edge and drags the near edge with the pointer; the right/bottom
+    // half keeps the classic grow-from-top-left behavior. Each axis is
+    // independent, so all four corners work.
+    seat->op_move_x = (seat->pointer_x - w->x) < w->width / 2;
+    seat->op_move_y = (seat->pointer_y - w->y) < w->height / 2;
+
+    river_seat_v1_op_start_pointer(seat->river_seat);
+}
+
+void exit_session(Seat *seat, Arg *arg) {
+    river_window_manager_v1_exit_session(window_manager);
+}
+
+void spawn(Seat *seat, Arg *arg) {
+    if(fork() == 0) execvp(((char **) arg->v)[0], (char **) arg->v);
+}

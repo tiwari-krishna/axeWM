@@ -46,6 +46,8 @@ static const char *autostart[][8] = {
     { "mpd", NULL },
     { "foot", "-s", NULL },
     { "waybg", NULL },
+    { "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", NULL },
+    { "dbus-update-activation-environment", "--systemd", "DISPLAY", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP=river", NULL },
     { "nightcolor", NULL },
     { "transmission-daemon", NULL },
     { "batteryAlert", NULL },
@@ -67,7 +69,7 @@ static const Rule rules[] = {
 };
 
 #define TAGKEY(KEY,TAG) \
-    {SUPER,               KEY, view,       { .u = 1 << TAG } }, \
+{SUPER,               KEY, view,       { .u = 1 << TAG } }, \
     {SUPER|CONTROL,       KEY, toggleview, { .u = 1 << TAG } }, \
     {SUPER|SHIFT,         KEY, tag,        { .u = 1 << TAG } }, \
     {SUPER|SHIFT|CONTROL, KEY, toggletag,  { .u = 1 << TAG } },
@@ -75,9 +77,11 @@ static const Rule rules[] = {
 static const char *termcmd[] = { "footclient", NULL };
 static const char *launchercmd[] = { "fuzzel", NULL };
 
-Keys keybinds[] = {
+static Keys keybinds[] = {
     {SUPER,         XKB_KEY_period, select_next_mon, {0} },
     {SUPER,         XKB_KEY_comma,  select_prev_mon, {0} },
+    {SUPER|SHIFT,   XKB_KEY_period, movemon,         { .i = +1 } },
+    {SUPER|SHIFT,   XKB_KEY_comma,  movemon,         { .i = -1 } },
 
     /* move focus up/down the stack, without moving windows */
     {SUPER,         XKB_KEY_j,      focus_next,      {0} },
@@ -89,7 +93,7 @@ Keys keybinds[] = {
 
     /* master area size */
     {SUPER,         XKB_KEY_o,      incnmaster,      { .i = +1 } },
-    {SUPER|SUPER,   XKB_KEY_o,      incnmaster,      { .i = -1 } },
+    {SUPER|SHIFT,   XKB_KEY_o,      incnmaster,      { .i = -1 } }, /* was SUPER|SUPER (== SUPER), a duplicate of the line above */
     {SUPER,         XKB_KEY_h,      setmfact,        { .f = -0.05 } },
     {SUPER,         XKB_KEY_l,      setmfact,        { .f = +0.05 } },
 
@@ -99,6 +103,7 @@ Keys keybinds[] = {
 
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
     {SUPER|SHIFT,   XKB_KEY_q,      exit_session,    {0} },
+    {SUPER|CONTROL, XKB_KEY_q,      restart_axe,     {0} },
 
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
     // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },
@@ -107,11 +112,11 @@ Keys keybinds[] = {
     // {SUPER,         XKB_KEY_space,  spawn,           { .v = launchercmd } },
 
     /* Clipboard & Notes */
-    { SUPER|SHIFT,          XKB_KEY_V,              spawn,          SHCMD("clip2Note") },
+    { SUPER|SHIFT,          XKB_KEY_v,              spawn,          SHCMD("clip2Note") },
     { SUPER,                XKB_KEY_z,              spawn,          SHCMD("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy") },
     { SUPER,                XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -e sh -c \"tmux attach || tmux new -s nonSense\"") },
     { SUPER,                XKB_KEY_space,          spawn,          { .v = launchercmd } },
-    { SUPER,                XKB_KEY_y,              spawn,          SHCMD("$term -e tSess") },
+    { SUPER,                XKB_KEY_y,              spawn,          SHCMD("$TERMINAL -e tSess") }, /* was $term (unset var) */
     // { SUPER|SHIFT,       XKB_KEY_space,          spawn,          { .v = launchercmd } },
     { SUPER|SHIFT,          XKB_KEY_Return,         spawn,          { .v = termcmd } },
     // { ALT,               XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -e openInVim") },
@@ -124,6 +129,7 @@ Keys keybinds[] = {
     /* Utilities */
     // { SUPER|CONTROL,     XKB_KEY_v,              spawn,          SHCMD("pavucontrol") },
     { SUPER,                XKB_KEY_c,              spawn,          SHCMD("galculator") },
+    // { ALT,                XKB_KEY_c,              spawn,          SHCMD("galculator") },
 
     /* Music Player */
     { SUPER|ALT,            XKB_KEY_Return,         spawn,          SHCMD("$TERMINAL -a=ncmpcpp -e ncmpcpp") },
@@ -136,7 +142,7 @@ Keys keybinds[] = {
     { SHIFT,                XKB_KEY_Print,          spawn,          SHCMD("scrshot sel") },
 
     /* Misc Tools */
-    { SUPER|SHIFT,          XKB_KEY_Y,              spawn,          SHCMD("emoji-picker") },
+    { SUPER|SHIFT,          XKB_KEY_y,              spawn,          SHCMD("emoji-picker") },
 
     /* XF86 / Hardware Keys */
     { 0,                    XKB_KEY_XF86MonBrightnessUp,   spawn,   SHCMD("brightnessctl -e set 2%+") },
@@ -171,13 +177,13 @@ Keys keybinds[] = {
     { ALT,                  XKB_KEY_apostrophe,     spawn,          SHCMD("mpc seek 0%") },
 
     /* Wallpaper & Power */
-    { SUPER|SHIFT,          XKB_KEY_W,              spawn,          SHCMD("set-wallpaper") },
+    { SUPER|SHIFT,          XKB_KEY_w,              spawn,          SHCMD("set-wallpaper") },
     { ALT|CONTROL,          XKB_KEY_w,              spawn,          SHCMD("randomize-wall") },
     // { SUPER,             XKB_KEY_grave,          spawn,          SHCMD("alacritty") },
 
     { SUPER,                XKB_KEY_BackSpace,      spawn,          SHCMD("power") },
-    { SUPER|SHIFT,          XKB_KEY_D,              spawn,          SHCMD("pcmanfm") },
-    { SUPER|SHIFT,          XKB_KEY_E,              spawn,          SHCMD("$TERMINAL -e htop") },
+    { SUPER|SHIFT,          XKB_KEY_d,              spawn,          SHCMD("pcmanfm") },
+    { SUPER|SHIFT,          XKB_KEY_e,              spawn,          SHCMD("$TERMINAL -e htop") },
     { SUPER,                XKB_KEY_w,              spawn,          SHCMD("$BROWSER") },
 
     { SUPER,                XKB_KEY_v,              spawn,          SHCMD("$TERMINAL -e transg-tui") },
@@ -188,17 +194,17 @@ Keys keybinds[] = {
     { SUPER|SHIFT,          XKB_KEY_slash,          spawn,          SHCMD("umount-drives") },
     { SUPER|CONTROL,        XKB_KEY_r,              spawn,          SHCMD("webcam-show") },
     { SUPER,                XKB_KEY_e,              spawn,          SHCMD("qr-gen") },
-    { SUPER|SHIFT,          XKB_KEY_R,              spawn,          SHCMD("qr-Reader") },
+    { SUPER|SHIFT,          XKB_KEY_r,              spawn,          SHCMD("qr-Reader") },
     { SUPER,                XKB_KEY_m,              spawn,          SHCMD("movie-watch") },
-    { SUPER|SHIFT,          XKB_KEY_B,              spawn,          SHCMD("read-book") },
+    { SUPER|SHIFT,          XKB_KEY_b,              spawn,          SHCMD("read-book") },
 
     /* Gammastep / Nightcolor */
     { SUPER,                XKB_KEY_u,              spawn,          SHCMD("nightcolor 1") },
-    { SUPER|SHIFT,          XKB_KEY_U,              spawn,          SHCMD("nightcolor") },
+    { SUPER|SHIFT,          XKB_KEY_u,              spawn,          SHCMD("nightcolor") },
 
     /* Network / Media / Bar Controls */
     // { ALT,               XKB_KEY_w,              spawn,          SHCMD("$TERMINAL -e nmtui") },
-    { SUPER|SHIFT,          XKB_KEY_M,              spawn,          SHCMD("mpv-play") },
+    { SUPER|SHIFT,          XKB_KEY_m,              spawn,          SHCMD("mpv-play") },
     // { SUPER,             XKB_KEY_b,              spawn,          SHCMD("killall -SIGUSR1 waybar") },
     // { SUPER,             XKB_KEY_b,              spawn,          SHCMD("bar mode toggle") },
     { SUPER,                XKB_KEY_a,              spawn,          SHCMD("$TERMINAL -e lf") },
@@ -206,7 +212,7 @@ Keys keybinds[] = {
     { SUPER,                XKB_KEY_p,              spawn,          SHCMD("tmux new-window -n \"Nvim\" \"fzf-proj\"") },
     { SUPER,                XKB_KEY_n,              spawn,          SHCMD("$TERMINAL -e take-notes") },
     { SUPER,                XKB_KEY_i,              spawn,          SHCMD("drawing") },
-    { CONTROL|SHIFT,        XKB_KEY_X,              spawn,          SHCMD("killTask") },
+    { CONTROL|SHIFT,        XKB_KEY_x,              spawn,          SHCMD("killTask") },
 
     { SUPER,                XKB_KEY_semicolon,      spawn,          SHCMD("spellchk") },
 
@@ -221,7 +227,7 @@ Keys keybinds[] = {
     TAGKEY(XKB_KEY_9, 8)
 };
 
-Mousebinds mousebinds[] = {
+static Mousebinds mousebinds[] = {
     {SUPER, BTN_LEFT,  movewin,   {0} },
     {SUPER, BTN_RIGHT, resizewin, {0} },
 };
