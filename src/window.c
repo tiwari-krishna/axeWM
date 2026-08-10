@@ -191,11 +191,14 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
         }
     }
 
-     // Same reasoning, for harpoon-style marks - gotomark would otherwise
-     // read freed memory the next time this slot is jumped to.
-     for(int i = 0; i < MARK_COUNT; i++) {
-         if(axe.marks[i] == window) axe.marks[i] = NULL;
-     }
+    // Same reasoning, for nvHopper-style marks - gotomark would otherwise
+    // read freed memory the next time this slot is jumped to.
+    for(int i = 0; i < MARK_COUNT; i++) {
+        if(axe.marks[i] == window) axe.marks[i] = NULL;
+    }
+    // Keep the picker's own display in sync if it happens to be open on
+    // a window that just closed - see marksui.c.
+    marksui_notify_mark_changed();
 
     river_node_v1_destroy(window->river_node);
     river_window_v1_destroy(window->river_window);

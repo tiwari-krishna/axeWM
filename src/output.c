@@ -7,6 +7,7 @@ void river_output_v1_removed(void *data, struct river_output_v1 *obj) {
     Output *output = data;
     bar_destroy(output);
     tabbar_destroy(output);
+    marksui_output_removed(output);
 
     // FIX: selmon previously kept pointing at this Output after it's freed
     // below if this happened to be the currently-selected monitor (e.g. a

@@ -276,10 +276,10 @@ static void blend_pixel_bgra(uint8_t *buf, int w, int h, int x, int y, const uin
 }
 
 
-void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]) {
+void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4]) {
     int pen_x = x;
     int line_h = line_ascender - line_descender;
-    int baseline_y = (h - line_h) / 2 + line_ascender;
+    int baseline_y = y0 + (row_h - line_h) / 2 + line_ascender;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
         FT_Face face = face_for_codepoint(cp);
@@ -291,10 +291,10 @@ void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t c
 
         if(is_emoji && g->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
             if(g->bitmap.rows == 0) continue;
-            int target_h = h - 2;
+            int target_h = row_h - 2;
             float scale = (float) target_h / (float) g->bitmap.rows;
             int dst_w = (int) (g->bitmap.width * scale);
-            int gy_top = (h - target_h) / 2;
+             int gy_top = y0 + (row_h - target_h) / 2;
 
             for(int dy = 0; dy < target_h; dy++) {
                 int sy = (int) (dy / scale);
@@ -414,19 +414,19 @@ static void redraw(Output *o) {
 
         char label[2] = { (char) ('1' + t), '\0' };
         int tw = measure_text_width(label);
-        draw_text(buf, w, h, x + (cellw - tw) / 2, label, fg);
+        draw_text(buf, w, h, x + (cellw - tw) / 2, 0, h, label, fg);
 
         x += cellw;
     }
 
     if(passthrough) {
         x += 6;
-        draw_text(buf, w, h, x, "PASSTHROUGH", fg);
+        draw_text(buf, w, h, x, 0, h, "PASSTHROUGH", fg);
     }
 
     if(cmd_output[0] != '\0') {
         int tw = measure_text_width(cmd_output);
-        draw_text(buf, w, h, w - tw - 8, cmd_output, fg);
+        draw_text(buf, w, h, w - tw - 8, 0, h, cmd_output, fg);
     }
 
     munmap(buf, size);

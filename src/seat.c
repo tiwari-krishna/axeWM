@@ -264,4 +264,5 @@ void river_window_manager_v1_seat(void *data, struct river_window_manager_v1 *ob
         pointer_binding_create(seat, mousebinds[i].mods, mousebinds[i].button, mousebinds[i].func, &mousebinds[i].arg);
     }
     bar_setup_seat_autohide(seat);
+    marksui_setup_seat(seat);
 }

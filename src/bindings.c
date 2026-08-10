@@ -17,7 +17,7 @@ const struct river_xkb_binding_v1_listener xkb_binding_listener = {
     .released = river_xkb_binding_v1_released,
 };
 
-void xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, void (*func)(Seat *seat, Arg *arg), Arg *arg) {
+Key *xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, void (*func)(Seat *seat, Arg *arg), Arg *arg) {
     Key *key = calloc(1, sizeof(Key));
     key->river_xkb_binding = river_xkb_bindings_v1_get_xkb_binding(xkb_bindings, seat->river_seat, keysym, modifiers);
     key->seat = seat;
@@ -29,6 +29,7 @@ void xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, voi
     river_xkb_binding_v1_enable(key->river_xkb_binding);
 
     wl_list_insert(&seat->keys, &key->link);
+    return key;
 }
 
 void xkb_hold_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym,

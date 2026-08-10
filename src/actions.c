@@ -286,7 +286,7 @@ void togglepassthrough(Seat *seat, Arg *arg) {
     wl_list_for_each(s, &axe.seats, link) {
         Key *key;
         wl_list_for_each(key, &s->keys, link) {
-            if(key->func == togglepassthrough || key->release_func != NULL) continue;
+            if(key->func == togglepassthrough || key->release_func != NULL || key->managed_externally) continue;
             if(passthrough) river_xkb_binding_v1_disable(key->river_xkb_binding);
             else river_xkb_binding_v1_enable(key->river_xkb_binding);
         }
@@ -337,6 +337,11 @@ void gotomark(Seat *seat, Arg *arg) {
     seat->pending_warp_any_state = true;
 
     river_window_manager_v1_manage_dirty(window_manager);
+}
+
+// Opens/closes the graphical marks picker - see marksui.c.
+void togglemarksui(Seat *seat, Arg *arg) {
+    marksui_toggle();
 }
 
 void toggleview(Seat *seat, Arg *arg) {

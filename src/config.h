@@ -56,6 +56,23 @@ static const uint8_t tab_fg_color[4]     = { 0xd8, 0xde, 0xe9, 0xff };
 static const uint8_t tab_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff };
 static const uint8_t tab_sel_fg_color[4] = { 0xff, 0xff, 0xff, 0xff };
 
+/* nvHopper-style marks picker (marksui.c) - a small centered overlay
+ * listing all MARK_COUNT (axe.h) slots. Toggled with togglemarksui
+ * below; while open, j/k move the highlighted row, shift+j/shift+k swap
+ * the highlighted slot's mark with its neighbor (reordering which
+ * window a given MARKKEY jumps to), Return jumps to the highlighted
+ * mark and closes, Escape closes without jumping, d clears the
+ * highlighted slot. None of those five are rebindable here - only via
+ * marksui_setup_seat() in marksui.c, since they're deliberately fixed
+ * "modal" keys rather than regular global binds (see that file's top
+ * comment for why). */
+static const int marksui_width = 820;
+static const int marksui_row_height = 56;
+static const uint8_t marksui_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xf0 };
+static const uint8_t marksui_fg_color[4]     = { 0xd8, 0xde, 0xe9, 0xff };
+static const uint8_t marksui_sel_bg_color[4] = { 0x4c, 0x56, 0x6a, 0xff };
+static const uint8_t marksui_sel_fg_color[4] = { 0xff, 0xff, 0xff, 0xff };
+
 /* spawned once at startup and left running; each newline it writes to
  * stdout becomes the new status text (no polling - update on your own
  * schedule, e.g. via a signal to your own script). NULL to disable. */
@@ -201,6 +218,7 @@ static Keys keybinds[] = {
     {SUPER|CONTROL, XKB_KEY_q,      restart_axe,     {0} },
     {SUPER|ALT,     XKB_KEY_b,      togglebar,       {0} },
     {SUPER|CONTROL, XKB_KEY_p,      togglepassthrough, {0} },
+    {SUPER|SHIFT,   XKB_KEY_g,      togglemarksui,   {0} },
 
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
     // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },

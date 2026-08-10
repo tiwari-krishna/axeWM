@@ -35,6 +35,25 @@ typedef struct Window Window;
 typedef struct Output Output;
 typedef struct Seat Seat;
 
+typedef union {
+    int i;
+    void *v;
+    float f;
+    uint32_t u;
+} Arg;
+
+typedef struct {
+    struct river_xkb_binding_v1 *river_xkb_binding;
+    struct wl_list link;
+
+    Seat *seat;
+
+    void (*func)(Seat *seat, Arg *arg);
+    void (*release_func)(Seat *seat, Arg *arg);
+    Arg *arg;
+    bool managed_externally;
+} Key;
+
 typedef enum {
     LAYOUT_TILE = 0,
     LAYOUT_TABBED,
@@ -182,6 +201,18 @@ struct Seat {
     // keeps its existing behavior unchanged.
     bool pending_warp_any_state;
 
+    // marksui.c's nav keybindings - one set per seat, created once at
+    // startup (marksui_setup_seat) and left disabled until the picker
+    // is toggled open, then re-disabled on close. See marksui.c's top
+    // comment for why these are global river_xkb_binding_v1 binds
+    // rather than real keyboard focus on the picker's surface.
+    Key *marksui_down, *marksui_up;         // j / k - move the highlighted row
+    Key *marksui_move_down, *marksui_move_up; // shift+j / shift+k - reorder
+    Key *marksui_confirm; // Return - jump to highlighted mark, close
+    Key *marksui_cancel;  // Escape - close without jumping
+    Key *marksui_quit;    // q - same as Escape, close without jumping
+    Key *marksui_clear;   // d - clear the highlighted slot
+
     // For idle.c only - obtained via the river_seat_v1.wl_seat event.
     struct wl_seat *wl_seat;
     bool idle_setup_done;
@@ -222,24 +253,6 @@ typedef struct {
     // river_window_v1_closed) so this can never dangle.
     Window *marks[MARK_COUNT];
 } WindowManager;
-
-typedef union {
-    int i;
-    void *v;
-    float f;
-    uint32_t u;
-} Arg;
-
-typedef struct {
-    struct river_xkb_binding_v1 *river_xkb_binding;
-    struct wl_list link;
-
-    Seat *seat;
-
-    void (*func)(Seat *seat, Arg *arg);
-    void (*release_func)(Seat *seat, Arg *arg);
-    Arg *arg;
-} Key;
 
 typedef struct {
     struct river_pointer_binding_v1 *river_pointer_binding;
@@ -396,7 +409,7 @@ void render_window(Window *window);
 // rendering path as the status bar, without loading its own fonts.
 void fill_rect(uint8_t *buf, int w, int h, int x0, int y0, int x1, int y1, const uint8_t color[4]);
 int measure_text_width(const char *s);
-void draw_text(uint8_t *buf, int w, int h, int x, const char *s, const uint8_t color[4]);
+void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4]);
 
 // ---------------------------------------------------------------------
 // output.c - river_output_v1 / layer-shell output handling
@@ -411,7 +424,7 @@ void render_seat(Seat *seat);
 // ---------------------------------------------------------------------
 // bindings.c - xkb key bindings + pointer button bindings
 // ---------------------------------------------------------------------
-void xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, void (*func)(Seat *seat, Arg *arg), Arg *arg);
+Key *xkb_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym, void (*func)(Seat *seat, Arg *arg), Arg *arg);
 void xkb_hold_binding_create(Seat *seat, uint32_t modifiers, xkb_keysym_t keysym,
                              void (*press_func)(Seat *seat, Arg *arg),
                              void (*release_func)(Seat *seat, Arg *arg), Arg *arg);
@@ -479,5 +492,15 @@ void tabselect(Seat *seat, Arg *arg);
 void togglepassthrough(Seat *seat, Arg *arg);
 void markwindow(Seat *seat, Arg *arg);
 void gotomark(Seat *seat, Arg *arg);
+void togglemarksui(Seat *seat, Arg *arg);
+
+// ---------------------------------------------------------------------
+// marksui.c - nvHopper-style graphical picker over the marks[] array
+// (see markwindow/gotomark above, in actions.c)
+// ---------------------------------------------------------------------
+void marksui_setup_seat(Seat *seat);
+void marksui_toggle(void);
+void marksui_output_removed(Output *output);
+void marksui_notify_mark_changed(void);
 
 #endif /* AXEH */
