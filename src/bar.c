@@ -26,6 +26,16 @@ static FT_Library ft_library;
 static FT_Face ft_face; // NULL if font load failed - drawing text becomes a no-op, bar still shows colored blocks
 static FT_Face ft_face_emoji; // NULL if unavailable/disabled - codepoints ft_face lacks fall back here
 
+// Second, larger instance of the same two faces, loaded once alongside
+// the normal ones - purely for marksui.c's picker (see marksui_font_scale
+// in config.h). Kept as fully separate FT_Face objects rather than
+// dynamically resizing ft_face/ft_face_emoji per-draw and restoring
+// afterward: simpler, avoids any "forgot to restore" hazard, and the
+// bitmap-strike selection load_face() does for emoji fonts doesn't have
+// a clean temporary-resize story anyway (it's picking among fixed
+// strikes, not continuously scaling).
+static FT_Face ft_face_lg, ft_face_emoji_lg;
+
 static char cmd_output[256] = "";
 
 static bool bar_visible = true;
@@ -41,6 +51,7 @@ static uint32_t status_epoch = 0; // bumped on every status text change - see re
 // bar's (bar_height), so the actual baseline has to be derived per-call
 // from the target buffer's own height, not baked in once at startup.
 static int line_ascender, line_descender;
+static int line_ascender_lg, line_descender_lg; // metrics for ft_face_lg
 
 // Spawn bar_status_cmd once, left running for the lifetime of this axe
 // process. Its stdout is piped back to us non-blocking; bar_status_readable()
@@ -187,6 +198,8 @@ void bar_init(void) {
     FcInit();
     load_face(bar_font_name, bar_font_size, &ft_face);
     load_face(bar_emoji_font_name, bar_font_size, &ft_face_emoji);
+    load_face(bar_font_name, bar_font_size * marksui_font_scale, &ft_face_lg);
+    load_face(bar_emoji_font_name, bar_font_size * marksui_font_scale, &ft_face_emoji_lg);
 
     if(ft_face == NULL) {
         fprintf(stderr, "bar: primary font unavailable - bar will show without text\n");
@@ -195,6 +208,14 @@ void bar_init(void) {
 
     line_ascender = ft_face->size->metrics.ascender >> 6;
     line_descender = ft_face->size->metrics.descender >> 6; // negative
+
+    if(ft_face_lg != NULL) {
+        line_ascender_lg = ft_face_lg->size->metrics.ascender >> 6;
+        line_descender_lg = ft_face_lg->size->metrics.descender >> 6;
+    } else {
+        fprintf(stderr, "marksui: larger font unavailable - picker will show without text\n");
+    }
+
     spawn_status();
 }
 
@@ -220,9 +241,11 @@ static uint32_t utf8_next(const char **p) {
     return cp;
 }
 
-static FT_Face face_for_codepoint(uint32_t cp) {
-    if(ft_face != NULL && FT_Get_Char_Index(ft_face, cp) != 0) return ft_face;
-    if(ft_face_emoji != NULL && FT_Get_Char_Index(ft_face_emoji, cp) != 0) return ft_face_emoji;
+static FT_Face face_for_codepoint(uint32_t cp, bool large) {
+    FT_Face primary = large ? ft_face_lg : ft_face;
+    FT_Face emoji = large ? ft_face_emoji_lg : ft_face_emoji;
+    if(primary != NULL && FT_Get_Char_Index(primary, cp) != 0) return primary;
+    if(emoji != NULL && FT_Get_Char_Index(emoji, cp) != 0) return emoji;
     return NULL;
 }
 
@@ -230,7 +253,7 @@ int measure_text_width(const char *s) {
     int width = 0;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
-        FT_Face face = face_for_codepoint(cp);
+        FT_Face face = face_for_codepoint(cp, false);
         if(face == NULL) continue;
 
         bool is_emoji = (face == ft_face_emoji);
@@ -276,16 +299,19 @@ static void blend_pixel_bgra(uint8_t *buf, int w, int h, int x, int y, const uin
 }
 
 
-void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4]) {
+void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4], bool large) {
     int pen_x = x;
-    int line_h = line_ascender - line_descender;
-    int baseline_y = y0 + (row_h - line_h) / 2 + line_ascender;
+    int asc = large ? line_ascender_lg : line_ascender;
+    int desc = large ? line_descender_lg : line_descender;
+    int line_h = asc - desc;
+    int baseline_y = y0 + (row_h - line_h) / 2 + asc;
     uint32_t cp;
     while((cp = utf8_next(&s)) != 0) {
-        FT_Face face = face_for_codepoint(cp);
+        FT_Face face = face_for_codepoint(cp,large);
         if(face == NULL) continue;
 
-        bool is_emoji = (face == ft_face_emoji);
+        FT_Face emoji_face = large ? ft_face_emoji_lg : ft_face_emoji;
+        bool is_emoji = (face == emoji_face);
         if(FT_Load_Char(face, cp, is_emoji ? (FT_LOAD_RENDER | FT_LOAD_COLOR) : FT_LOAD_RENDER) != 0) continue;
         FT_GlyphSlot g = face->glyph;
 
@@ -294,7 +320,7 @@ void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char 
             int target_h = row_h - 2;
             float scale = (float) target_h / (float) g->bitmap.rows;
             int dst_w = (int) (g->bitmap.width * scale);
-             int gy_top = y0 + (row_h - target_h) / 2;
+            int gy_top = y0 + (row_h - target_h) / 2;
 
             for(int dy = 0; dy < target_h; dy++) {
                 int sy = (int) (dy / scale);
@@ -414,19 +440,19 @@ static void redraw(Output *o) {
 
         char label[2] = { (char) ('1' + t), '\0' };
         int tw = measure_text_width(label);
-        draw_text(buf, w, h, x + (cellw - tw) / 2, 0, h, label, fg);
+        draw_text(buf, w, h, x + (cellw - tw) / 2, 0, h, label, fg, false);
 
         x += cellw;
     }
 
     if(passthrough) {
         x += 6;
-        draw_text(buf, w, h, x, 0, h, "PASSTHROUGH", fg);
+        draw_text(buf, w, h, x, 0, h, "PASSTHROUGH", fg, false);
     }
 
     if(cmd_output[0] != '\0') {
         int tw = measure_text_width(cmd_output);
-        draw_text(buf, w, h, w - tw - 8, 0, h, cmd_output, fg);
+        draw_text(buf, w, h, w - tw - 8, 0, h, cmd_output, fg, false);
     }
 
     munmap(buf, size);

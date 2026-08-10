@@ -194,7 +194,7 @@ static void redraw(Output *o) {
                 snprintf(labeled, sizeof(labeled), "(%d) %s", idx + 1, base_title);
                 title = labeled;
             }
-            draw_text(buf, w, h, x + 6, 0, h, title, fg);
+            draw_text(buf, w, h, x + 6, 0, h, title, fg, false);
 
             x += cw;
             idx++;

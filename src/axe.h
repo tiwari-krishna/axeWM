@@ -409,7 +409,7 @@ void render_window(Window *window);
 // rendering path as the status bar, without loading its own fonts.
 void fill_rect(uint8_t *buf, int w, int h, int x0, int y0, int x1, int y1, const uint8_t color[4]);
 int measure_text_width(const char *s);
-void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4]);
+void draw_text(uint8_t *buf, int w, int h, int x, int y0, int row_h, const char *s, const uint8_t color[4], bool large);
 
 // ---------------------------------------------------------------------
 // output.c - river_output_v1 / layer-shell output handling

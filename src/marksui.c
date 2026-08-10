@@ -94,7 +94,7 @@ static void marksui_paint(void) {
         }
 
         const uint8_t *fg = sel ? marksui_sel_fg_color : marksui_fg_color;
-        draw_text(buf, w, h, 10, y0, marksui_row_height, line, fg);
+        draw_text(buf, w, h, 10, y0, marksui_row_height, line, fg, true);
     }
 
     munmap(buf, size);

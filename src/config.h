@@ -65,7 +65,11 @@ static const uint8_t tab_sel_fg_color[4] = { 0xff, 0xff, 0xff, 0xff };
  * highlighted slot. None of those five are rebindable here - only via
  * marksui_setup_seat() in marksui.c, since they're deliberately fixed
  * "modal" keys rather than regular global binds (see that file's top
- * comment for why). */
+ + * comment for why). Its own font is loaded once at startup, separate
+ * from bar_font_size/bar_font_name, at marksui_font_scale times the
+ * size (see bar_init() in bar.c) - not just a bigger row, an actually
+ * bigger typeface. */
+static const int marksui_font_scale = 2;
 static const int marksui_width = 820;
 static const int marksui_row_height = 56;
 static const uint8_t marksui_bg_color[4]     = { 0x1a, 0x1a, 0x1a, 0xf0 };
