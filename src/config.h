@@ -167,12 +167,6 @@ static const IdleTimeout idle_timeouts[] = {
  * after this many ms idle, back on on resume. 0 or negative disables. */
 static const int display_off_timeout_ms = 60000;
 
-/* hide the pointer cursor after this many ms with no *mouse movement*
- * specifically - keyboard-only activity does not reset this, unlike
- * display_off_timeout_ms above. Shown again the instant the mouse
- * actually moves. See cursor.c. 0 or negative disables. */
-static const int cursor_hide_timeout_ms = 3000;
-
 #define TAGKEY(KEY,TAG) \
 {SUPER,               KEY, view,       { .u = 1 << TAG } }, \
     {SUPER|CONTROL,       KEY, toggleview, { .u = 1 << TAG } }, \

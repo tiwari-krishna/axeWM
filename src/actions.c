@@ -488,20 +488,6 @@ void movewin(Seat *seat, Arg *arg) {
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
 
-    // If our own cursor-hide op is currently open, end it first,
-    // synchronously, before starting the real one below - river only
-    // allows one op per seat, and unlike the old ext-idle-notify-based
-    // design, there's no async event to race against here since this
-    // button press is itself real pointer motion (op_delta would also
-    // see it) - but ending our op explicitly rather than waiting for
-    // that to be noticed keeps this deterministic regardless. Wayland
-    // preserves per-connection request ordering, so the compositor
-    // always sees our op_end before this op_start_pointer.
-    if(seat->cursor_hidden) {
-        river_seat_v1_op_end(seat->river_seat);
-        seat->cursor_hidden = false;
-    }
-
     seat->op_window = w;
     seat->op_mode = 0;
     seat->op_orig_x = w->floatx;
@@ -517,12 +503,6 @@ void resizewin(Seat *seat, Arg *arg) {
     if(seat->op_window != NULL) return;
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
-
-    // See the matching comment in movewin() just above.
-    if(seat->cursor_hidden) {
-        river_seat_v1_op_end(seat->river_seat);
-        seat->cursor_hidden = false;
-    }
 
     seat->op_window = w;
     seat->op_mode = 1;

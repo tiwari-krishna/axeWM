@@ -218,27 +218,6 @@ struct Seat {
     bool idle_setup_done;
     struct wl_list idle_watchers;
     struct ext_idle_notification_v1 *display_notification;
-
-    // For cursor.c only - hide the pointer after N ms with no mouse
-    // movement specifically (see cursor.c's top comment for exactly how
-    // "no movement" is detected and why). wl_pointer is acquired eagerly
-    // by idle.c's PendingSeat handling (see the comment there for why -
-    // in short, attaching a capabilities listener late enough to learn
-    // this Seat's identity first would miss the compositor's one-shot
-    // initial capabilities burst) - cursor.c only consumes it.
-    // cursor_check_timer_fd is a small dedicated timerfd (independent of
-    // any Wayland event) polled from main.c. pending_cursor_hide/show
-    // are consumed by cursor_apply_seat(), called from manage_seat()
-    // every manage sequence - see cursor.c's top comment for why this
-    // can't just act directly wherever motion (or its absence) is
-    // detected. cursor_hidden tracks whether the currently-open op (if
-    // any) is one we ourselves started for this, as opposed to a real
-    // movewin/resizewin drag.
-    struct wl_pointer *wl_pointer;
-    int cursor_check_timer_fd;
-    int64_t cursor_last_motion_ms;
-    bool pending_cursor_hide, pending_cursor_show;
-    bool cursor_hidden;
 };
 
 typedef struct {
@@ -453,16 +432,6 @@ void idle_attach_wl_output(Output *output, uint32_t name);
 void idle_notifier_ready(void);
 void idle_power_manager_ready(void);
 void idle_registry_global_remove(uint32_t name);
-
-// ---------------------------------------------------------------------
-// cursor.c - hide the pointer cursor after N ms with no mouse movement
-// ---------------------------------------------------------------------
-void cursor_attach_wl_seat(Seat *seat);
-void cursor_teardown_seat(Seat *seat);
-int cursor_seat_timer_fd(Seat *seat);
-void cursor_pointer_moved(Seat *seat);
-void cursor_timer_fired(Seat *seat);
-void cursor_apply_seat(Seat *seat);
 
 // ---------------------------------------------------------------------
 // bar.c - status bar (tags + one-shot status command) via wlr-layer-shell
