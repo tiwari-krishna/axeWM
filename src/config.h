@@ -218,6 +218,10 @@ static Keys keybinds[] = {
     {SUPER|CONTROL, XKB_KEY_p,      togglepassthrough, {0} },
     {SUPER|SHIFT,   XKB_KEY_g,      togglemarksui,   {0} },
 
+    {SUPER|CONTROL, XKB_KEY_period, swaptagmon,      { .i = +1 } },
+    {SUPER|CONTROL, XKB_KEY_comma,  swaptagmon,      { .i = -1 } },
+    {ALT,           XKB_KEY_Tab,      togglelastfocus, {0} },
+
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
     // {SUPER,         XKB_KEY_Return, spawn,           SHCMD("$TERMINAL -e $(tmux attach || tmux new -s nonSense)") },
     // {SUPER,         XKB_KEY_w,      spawn,           SHCMD("$BROWSER")},

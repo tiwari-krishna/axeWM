@@ -83,7 +83,10 @@ Window *adjacent_visible(Window *w, int dir) {
 void set_focus(Seat *seat, Window *window) {
     if(seat->focused == window) return;
 
-    if(seat->focused != NULL) seat->focused->focused = false;
+    if(seat->focused != NULL) {
+        seat->focused->focused = false;
+        seat->alt_prev = seat->focused;
+    }
     seat->focused = window;
     if(window != NULL) {
         window->focused = true;
@@ -185,6 +188,38 @@ void movemon(Seat *seat, Arg *arg) {
     river_window_manager_v1_manage_dirty(window_manager);
 }
 
+void swaptagmon(Seat *seat, Arg *arg) {
+    if(selmon == NULL) return;
+
+    struct wl_list *node = arg->i > 0 ? selmon->link.next : selmon->link.prev;
+    if(node == &axe.outputs) return;
+
+    Output *other = wl_container_of(node, other, link);
+    if(other == selmon) return;
+
+    uint32_t a_tagmask = selmon->tagmask, a_seltag = selmon->seltag;
+    uint32_t b_tagmask = other->tagmask,  b_seltag = other->seltag;
+
+    Window *w;
+    wl_list_for_each(w, &axe.windows, link) {
+        if(w->sticky) continue;
+        if(w->mon == selmon && (w->tagmask & a_tagmask)) {
+            w->mon = other;
+            clamp_float_geometry(w, other);
+        } else if(w->mon == other && (w->tagmask & b_tagmask)) {
+            w->mon = selmon;
+            clamp_float_geometry(w, selmon);
+        }
+    }
+
+    selmon->tagmask = b_tagmask;
+    selmon->seltag  = b_seltag;
+    other->tagmask  = a_tagmask;
+    other->seltag   = a_seltag;
+
+    river_window_manager_v1_manage_dirty(window_manager);
+}
+
 void focus_next(Seat *seat, Arg *arg) {
     if(seat->focused == NULL) return;
 
@@ -205,6 +240,25 @@ void focus_prev(Seat *seat, Arg *arg) {
         river_seat_v1_pointer_warp(seat->river_seat, seat->focused->x + seat->focused->width/2, seat->focused->y + seat->focused->height/2);
         river_window_manager_v1_manage_dirty(window_manager);
     }
+}
+
+void togglelastfocus(Seat *seat, Arg *arg) {
+    Window *target = seat->alt_prev;
+    if(target == NULL || target == seat->focused || target->mon == NULL) return;
+
+    if(!target->sticky && !ISVISIBLE(target)) {
+        uint32_t t = target->tagmask & -target->tagmask; // lowest set bit
+        if(t == 0) t = 1; // defensive - a window should always have one
+        target->mon->seltag = t;
+        target->mon->tagmask = t;
+    }
+
+    selmon = target->mon;
+    set_focus(seat, target);
+
+    seat->pending_warp = true;
+    seat->pending_warp_any_state = true; // may land on a floating/sticky/fullscreen window
+    river_window_manager_v1_manage_dirty(window_manager);
 }
 
 void incnmaster(Seat *seat, Arg *arg) {

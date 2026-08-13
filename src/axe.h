@@ -179,6 +179,8 @@ struct Seat {
     Window *focused;
     Window *hovered;
 
+    Window *alt_prev;
+
     struct wl_list keys;
     struct wl_list buttons;
 
@@ -362,6 +364,8 @@ void movewin(Seat *seat, Arg *arg);
 void resizewin(Seat *seat, Arg *arg);
 void togglesticky(Seat *seat, Arg *arg);
 void togglelayout(Seat *seat, Arg *arg);
+void togglelastfocus(Seat *seat, Arg *arg);
+void swaptagmon(Seat *seat, Arg *arg);
 
 // ---------------------------------------------------------------------
 // restart.c - self-exec restart with saved window/output state

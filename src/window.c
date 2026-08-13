@@ -181,6 +181,9 @@ void river_window_v1_closed(void *data, struct river_window_v1 *obj) {
         if(seat->hovered == window) {
             seat->hovered = NULL;
         }
+        if(seat->alt_prev == window) {
+            seat->alt_prev = NULL;
+        }
         if(seat->op_window == window) {
             seat->op_window = NULL;
             seat->op_ending = false;
