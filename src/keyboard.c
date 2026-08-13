@@ -49,6 +49,7 @@ const struct river_xkb_keyboard_v1_listener xkb_keyboard_listener = {
 
 void river_xkb_config_v1_finished(void *data, struct river_xkb_config_v1 *river_xkb_config_v1) {
     river_xkb_config_v1_destroy(river_xkb_config_v1);
+    if(xkb_config == river_xkb_config_v1) xkb_config = NULL;
 }
 
 void river_xkb_config_v1_xkb_keyboard(void *data, struct river_xkb_config_v1 *river_xkb_config_v1, struct river_xkb_keyboard_v1 *id) {

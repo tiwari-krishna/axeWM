@@ -444,7 +444,22 @@ void togglefloating(Seat *seat, Arg *arg) {
 
 void togglefullscreen(Seat *seat, Arg *arg) {
     if(seat->focused == NULL) return;
-    seat->focused->fullscreen = !seat->focused->fullscreen;
+
+    Window *w = seat->focused;
+    w->fullscreen = !w->fullscreen;
+
+    // Mirror river_window_v1_exit_fullscreen_requested's restore (window.c):
+    // a client-initiated fullscreen can move the window to a different
+    // output (pre_fullscreen_mon remembers the original one). Without this,
+    // exiting fullscreen via this keybind instead of the client's own exit
+    // path left the window stranded on the fullscreen output with a stale
+    // pre_fullscreen_mon that a later client-initiated exit could still
+    // consume and jump back to unexpectedly.
+    if(!w->fullscreen && w->pre_fullscreen_mon != NULL) {
+        w->mon = w->pre_fullscreen_mon;
+        w->pre_fullscreen_mon = NULL;
+    }
+
     river_window_manager_v1_manage_dirty(window_manager);
 }
 
@@ -488,6 +503,14 @@ void movewin(Seat *seat, Arg *arg) {
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
 
+    // Multi-seat: refuse if another seat already has an interactive op
+    // in progress on this window - otherwise both seats' op_delta would
+    // fight over the same w->floatx/floaty every motion event.
+    Seat *other;
+    wl_list_for_each(other, &axe.seats, link) {
+        if(other != seat && other->op_window == w) return;
+    }
+
     seat->op_window = w;
     seat->op_mode = 0;
     seat->op_orig_x = w->floatx;
@@ -503,6 +526,13 @@ void resizewin(Seat *seat, Arg *arg) {
     if(seat->op_window != NULL) return;
     Window *w = seat->hovered;
     if(w == NULL || !w->floating) return;
+
+    // Multi-seat: refuse if another seat already has an interactive op
+    // in progress on this window - see movewin() above for why.
+    Seat *other;
+    wl_list_for_each(other, &axe.seats, link) {
+        if(other != seat && other->op_window == w) return;
+    }
 
     seat->op_window = w;
     seat->op_mode = 1;

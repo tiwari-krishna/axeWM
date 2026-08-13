@@ -14,6 +14,15 @@ static bool title_regex_ok[LENGTH(rules)];
 
 void rules_init(void) {
     for(size_t i = 0; i < LENGTH(rules); i++) {
+        // A tag >= TAG_COUNT sets a tagmask bit no output's tagmask/seltag
+        // can ever match - the window would silently become permanently
+        // invisible with no obvious cause. Warn at startup rather than
+        // only when a matching window happens to appear.
+        if(rules[i].tag >= TAG_COUNT) {
+            fprintf(stderr, "warning: rule[%zu] tag %d out of range (TAG_COUNT=%d) - tag assignment will be ignored\n",
+                    i, rules[i].tag, TAG_COUNT);
+        }
+
         if(rules[i].title == NULL) continue;
 
         int err = regcomp(&title_regex[i], rules[i].title, REG_EXTENDED | REG_NOSUB | REG_ICASE);
@@ -93,7 +102,7 @@ void apply_rules(Window *window) {
             window->floating_explicit = true;
         }
 
-        if(rules[i].tag >= 0) {
+        if(rules[i].tag >= 0 && rules[i].tag < TAG_COUNT) {
             window->tagmask = 1u << rules[i].tag;
         }
 

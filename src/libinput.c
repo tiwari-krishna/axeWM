@@ -207,6 +207,7 @@ const struct river_libinput_device_v1_listener libinput_device_listener = {
 
 void river_libinput_config_v1_finished(void *data, struct river_libinput_config_v1 *obj) {
     river_libinput_config_v1_destroy(obj);
+    if(libinput_config == obj) libinput_config = NULL;
 }
 
 void river_libinput_config_v1_libinput_device(void *data, struct river_libinput_config_v1 *obj, struct river_libinput_device_v1 *id) {

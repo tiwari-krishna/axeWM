@@ -115,7 +115,7 @@ void river_seat_v1_pointer_position(void *data, struct river_seat_v1 *obj, int32
     // a stationary one. seat->hovered is kept accurate by
     // pointer_enter/pointer_leave regardless of why it changed; we just
     // wait for real motion before acting on it.
-    if(seat->hovered != NULL && seat->hovered != seat->focused) {
+    if(seat->hovered != NULL && seat->hovered != seat->focused && ISVISIBLE(seat->hovered)) {
         set_focus(seat, seat->hovered);
     }
 

@@ -1,7 +1,10 @@
 #include "axe.h"
 #include "config.h"
 
-void river_input_manager_v1_finished(void *data, struct river_input_manager_v1 *river_input_manager_v1) {}
+void river_input_manager_v1_finished(void *data, struct river_input_manager_v1 *river_input_manager_v1) {
+    river_input_manager_v1_destroy(river_input_manager_v1);
+    if(input_manager == river_input_manager_v1) input_manager = NULL;
+}
 
 void river_input_manager_v1_input_device(void *data, struct river_input_manager_v1 *river_input_manager_v1, struct river_input_device_v1 *id) {
     river_input_device_v1_add_listener(id, &input_device_listener, NULL);
@@ -27,4 +30,3 @@ const struct river_input_device_v1_listener input_device_listener = {
     .type = river_input_device_v1_type,
     .name = river_input_device_v1_name,
 };
-

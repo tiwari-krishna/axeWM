@@ -123,6 +123,7 @@ static void marksui_layer_surface_closed(void *data, struct zwlr_layer_surface_v
     // destroy objects the compositor already considers gone.
     marksui_open = false;
     marksui_set_nav_enabled(false);
+    marksui_output = NULL;
     marksui_layer_surface = NULL;
     marksui_surface = NULL;
     marksui_buffer = NULL;
@@ -138,6 +139,7 @@ static void marksui_close(Seat *seat, Arg *arg) {
     if(!marksui_open) return;
     marksui_open = false;
     marksui_set_nav_enabled(false);
+    marksui_output = NULL;
 
     if(marksui_layer_surface != NULL) {
         zwlr_layer_surface_v1_destroy(marksui_layer_surface);
