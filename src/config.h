@@ -159,13 +159,13 @@ static const Rule rules[] = {
 /* idle timeouts: after this many ms of seat inactivity, run `command`;
  * on activity resuming, run `resume_command` (NULL to skip). */
 static const IdleTimeout idle_timeouts[] = {
-    { 1200000, "systemctl suspend", NULL },
+    { 1200*1000, "systemctl suspend", NULL }, // Started using magic numbers but its easier
     // { 180000, "brightnessctl -s set 10%", "brightnessctl -r" },
 };
 
 /* turn every output off via wlr-output-power-management-unstable-v1
  * after this many ms idle, back on on resume. 0 or negative disables. */
-static const int display_off_timeout_ms = 60000;
+static const int display_off_timeout_ms = 60*1000;
 
 #define TAGKEY(KEY,TAG) \
 {SUPER,               KEY, view,       { .u = 1 << TAG } }, \

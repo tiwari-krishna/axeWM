@@ -3,8 +3,7 @@ MAIN_FILE := axe
 SRC_DIR := src
 BUILD_DIR := .build
 
-# FLAGS := -std=c23 -I $(BUILD_DIR) -I $(SRC_DIR) $(shell pkg-config --cflags --libs xkbcommon wayland-client)
-FLAGS := -std=c23 -I $(BUILD_DIR) -I $(SRC_DIR) $(shell pkg-config --cflags --libs xkbcommon wayland-cursor wayland-client freetype2 fontconfig)
+FLAGS := -std=c23 -I $(BUILD_DIR) -I $(SRC_DIR) $(shell pkg-config --cflags --libs xkbcommon wayland-client freetype2 fontconfig)
 
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
