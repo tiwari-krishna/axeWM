@@ -190,6 +190,8 @@ static Keys keybinds[] = {
     {SUPER,         XKB_KEY_comma,  select_prev_mon, {0} },
     {SUPER|SHIFT,   XKB_KEY_period, movemon,         { .i = +1 } },
     {SUPER|SHIFT,   XKB_KEY_comma,  movemon,         { .i = -1 } },
+    {SUPER|CONTROL, XKB_KEY_period, swaptagmon,      { .i = +1 } },
+    {SUPER|CONTROL, XKB_KEY_comma,  swaptagmon,      { .i = -1 } },
 
     /* move focus up/down the stack, without moving windows */
     {SUPER,         XKB_KEY_j,      focus_next,      {0} },
@@ -201,14 +203,14 @@ static Keys keybinds[] = {
 
     /* master area size */
     {SUPER,         XKB_KEY_o,      incnmaster,      { .i = +1 } },
-    {SUPER|SHIFT,   XKB_KEY_o,      incnmaster,      { .i = -1 } }, /* was SUPER|SUPER (== SUPER), a duplicate of the line above */
+    {SUPER|SHIFT,   XKB_KEY_o,      incnmaster,      { .i = -1 } },
     {SUPER,         XKB_KEY_h,      setmfact,        { .f = -0.05 } },
     {SUPER,         XKB_KEY_l,      setmfact,        { .f = +0.05 } },
 
     {SUPER|CONTROL, XKB_KEY_Return, zoom,            {0} },
     {SUPER,         XKB_KEY_f,  togglefloating,  {0} },
     {SUPER|SHIFT,   XKB_KEY_f,      togglefullscreen,{0} },
-    {SUPER,         XKB_KEY_g,      togglesticky,    {0} },
+    {SUPER,         XKB_KEY_bracketright,      togglesticky,    {0} },
     {SUPER,         XKB_KEY_Tab,      togglelayout,    {0} },
 
     {SUPER,         XKB_KEY_q,      destroy_window,  {0} },
@@ -216,10 +218,7 @@ static Keys keybinds[] = {
     {SUPER|CONTROL, XKB_KEY_q,      restart_axe,     {0} },
     {SUPER|ALT,     XKB_KEY_b,      togglebar,       {0} },
     {SUPER|CONTROL, XKB_KEY_p,      togglepassthrough, {0} },
-    {SUPER|SHIFT,   XKB_KEY_g,      togglemarksui,   {0} },
-
-    {SUPER|CONTROL, XKB_KEY_period, swaptagmon,      { .i = +1 } },
-    {SUPER|CONTROL, XKB_KEY_comma,  swaptagmon,      { .i = -1 } },
+    {SUPER,         XKB_KEY_g,      togglemarksui,   {0} },
     {ALT,           XKB_KEY_Tab,      togglelastfocus, {0} },
 
     // {SUPER|SHIFT,   XKB_KEY_Return, spawn,           { .v = termcmd } },
