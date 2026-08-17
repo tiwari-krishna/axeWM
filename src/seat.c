@@ -242,8 +242,9 @@ void river_window_manager_v1_seat(void *data, struct river_window_manager_v1 *ob
         river_layer_shell_seat_v1_add_listener(seat->river_layer_shell_seat, &layer_shell_seat_listener, seat);
     }
 
-    for(size_t i = 0; i < LENGTH(keybinds); i++) {
-        xkb_binding_create(seat, keybinds[i].mods, keybinds[i].key, keybinds[i].func, &keybinds[i].arg);
+
+    for(size_t i = 0; i < n_keybinds; i++) {
+         xkb_binding_create(seat, final_keybinds[i].mods, final_keybinds[i].key, final_keybinds[i].func, &final_keybinds[i].arg);
     }
 
     for(size_t i = 0; i < LENGTH(mousebinds); i++) {

@@ -65,6 +65,7 @@ void load_restart_state(void) {
 
     FILE *f = fopen(state_path(), "r");
     if(f == NULL) return; // no previous state - normal first launch
+    if(!config_loder()) return;
 
     char kind[2];
     while(fscanf(f, " %1s", kind) == 1) {

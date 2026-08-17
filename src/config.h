@@ -185,6 +185,9 @@ static const int display_off_timeout_ms = 60*1000;
 static const char *termcmd[] = { "footclient", NULL };
 static const char *launchercmd[] = { "fuzzel", NULL };
 
+extern Keys *final_keybinds;
+extern size_t n_keybinds;
+
 static Keys keybinds[] = {
     {SUPER,         XKB_KEY_period, select_next_mon, {0} },
     {SUPER,         XKB_KEY_comma,  select_prev_mon, {0} },

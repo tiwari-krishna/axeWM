@@ -23,6 +23,7 @@
 
 #include <regex.h>
 
+
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
 #define LENGTH(A) (sizeof A / sizeof A[0])
@@ -475,5 +476,11 @@ void marksui_setup_seat(Seat *seat);
 void marksui_toggle(void);
 void marksui_output_removed(Output *output);
 void marksui_notify_mark_changed(void);
+
+//----------------------------------------------------------------------
+// config.c - load lua config and set values (Experimental)
+// ---------------------------------------------------------------------
+
+int config_loder();
 
 #endif /* AXEH */

@@ -133,7 +133,14 @@ const struct wl_registry_listener registry_listener = {
 int main(int argc, char **argv) {
     saved_argc = argc;
     saved_argv = argv;
+
+    //load config file
+    if(config_loder() != 0){
+        return 1;
+    }
+
     load_restart_state();
+
     xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
     bar_init();
