@@ -24,8 +24,12 @@ typedef struct {
     char identifier[33];
     uint32_t tagmask;
     bool floating;
+    bool sticky;
+    bool fullscreen;
+    bool floating_explicit;
     int floatx, floaty, floatw, floath;
     int mon_index;
+    int pre_fullscreen_mon_index;
     struct wl_list link;
 } SavedWindow;
 
@@ -39,9 +43,26 @@ typedef struct {
     struct wl_list link;
 } SavedOutput;
 
+// One non-empty axe.marks[] slot - identifier-keyed like SavedWindow, so
+// it's restored the same way: consumed in apply_saved_window_state() the
+// moment a window with a matching identifier re-announces itself.
+typedef struct {
+    int slot;
+    char identifier[33];
+    struct wl_list link;
+} SavedMark;
+
 static struct wl_list saved_windows;
 static struct wl_list saved_outputs;
+static struct wl_list saved_marks;
 static bool state_loaded = false;
+
+// -1 = no saved value (old-format file, or selmon was NULL at save time -
+// e.g. no monitor ever got a pointer_position event). Consumed as each
+// Output registers, in apply_saved_output_state() below - never matches
+// a real output_index_of() result (always >= 0 for a registered output),
+// so it's a safe default with no extra guard needed at the call site.
+static int saved_selmon_index = -1;
 
 // axe.outputs is built by wl_list_insert() prepending each output as it's
 // announced, so "index" here just means "position in the list right now" -
@@ -61,6 +82,8 @@ static int output_index_of(Output *target) {
 void load_restart_state(void) {
     wl_list_init(&saved_windows);
     wl_list_init(&saved_outputs);
+    wl_list_init(&saved_marks);
+    saved_selmon_index = -1;
     state_loaded = true;
 
     FILE *f = fopen(state_path(), "r");
@@ -91,15 +114,35 @@ void load_restart_state(void) {
             wl_list_insert(&saved_outputs, &o->link);
         } else if(kind[0] == 'W') {
             SavedWindow *w = calloc(1, sizeof(SavedWindow));
-            int floating_int;
-            if(fscanf(f, "%32s %u %d %d %d %d %d %d",
+            int floating_int, sticky_int, fullscreen_int, floating_explicit_int;
+            // Same "widened, older files just get discarded cleanly"
+            // approach as the O-line comment above - sticky/fullscreen/
+            // floating_explicit/pre_fullscreen_mon_index are new fields
+            // appended at the end, so a pre-upgrade state file's W line
+            // runs short on this fscanf and `!= 12` catches it exactly
+            // like a truncated line always has here.
+            if(fscanf(f, "%32s %u %d %d %d %d %d %d %d %d %d %d",
                       w->identifier, &w->tagmask, &floating_int,
-                      &w->floatx, &w->floaty, &w->floatw, &w->floath, &w->mon_index) != 8) {
+                      &w->floatx, &w->floaty, &w->floatw, &w->floath, &w->mon_index,
+                      &sticky_int, &fullscreen_int, &floating_explicit_int,
+                      &w->pre_fullscreen_mon_index) != 12) {
                 free(w);
                 break;
             }
             w->floating = floating_int != 0;
+            w->sticky = sticky_int != 0;
+            w->fullscreen = fullscreen_int != 0;
+            w->floating_explicit = floating_explicit_int != 0;
             wl_list_insert(&saved_windows, &w->link);
+        } else if(kind[0] == 'M') {
+            SavedMark *m = calloc(1, sizeof(SavedMark));
+            if(fscanf(f, "%d %32s", &m->slot, m->identifier) != 2 || m->slot < 0 || m->slot >= MARK_COUNT) {
+                free(m);
+                break;
+            }
+            wl_list_insert(&saved_marks, &m->link);
+        } else if(kind[0] == 'S') {
+            if(fscanf(f, "%d", &saved_selmon_index) != 1) break;
         } else {
             break; // malformed - stop rather than loop forever on garbage
         }
@@ -115,6 +158,12 @@ void apply_saved_output_state(Output *output) {
     if(!state_loaded) return;
 
     int index = output_index_of(output);
+
+    // Independent of whether this output also has a SavedOutput entry
+    // below (tag/layout state) - the two are unrelated, so this must
+    // not live inside that loop or be skipped if that loop finds nothing.
+    if(index == saved_selmon_index) selmon = output;
+
     SavedOutput *o;
     wl_list_for_each(o, &saved_outputs, link) {
         if(o->index != index) continue;
@@ -142,6 +191,13 @@ void apply_saved_window_state(Window *window) {
 
         window->tagmask = w->tagmask;
         window->floating = w->floating;
+        window->sticky = w->sticky;
+        window->fullscreen = w->fullscreen;
+        // Locks the restored `floating` value against the "has a dialog
+        // parent -> auto-float" heuristic in river_window_v1_parent
+        // (window.c) re-triggering post-restart - same flag togglefloating
+        // and a matching config.h rule already set for the same reason.
+        window->floating_explicit = w->floating_explicit;
         window->floatx = w->floatx;
         window->floaty = w->floaty;
         window->floatw = w->floatw;
@@ -151,6 +207,16 @@ void apply_saved_window_state(Window *window) {
         Output *mon = output_by_index(w->mon_index);
         if(mon != NULL) window->mon = mon;
 
+        // Only meaningful alongside ->fullscreen - mirrors what
+        // river_window_v1_fullscreen_requested (window.c) sets live: the
+        // output to return to on exit_fullscreen_requested. -1 means
+        // there wasn't one (not fullscreen, or fullscreen with no output
+        // override), matching pre_fullscreen_mon's live default of NULL.
+        if(w->pre_fullscreen_mon_index >= 0) {
+            Output *pf = output_by_index(w->pre_fullscreen_mon_index);
+            if(pf != NULL) window->pre_fullscreen_mon = pf;
+        }
+
         clamp_float_geometry(window, window->mon);
 
         // Consumed - drop it rather than holding it for the rest of the
@@ -158,7 +224,18 @@ void apply_saved_window_state(Window *window) {
         // to a second window later).
         wl_list_remove(&w->link);
         free(w);
-        return;
+        break;
+    }
+
+    // Same identifier-match, independent list - a window can have both a
+    // SavedWindow entry and a SavedMark entry (or just one, or neither).
+    SavedMark *m, *m_tmp;
+    wl_list_for_each_safe(m, m_tmp, &saved_marks, link) {
+        if(strcmp(m->identifier, window->identifier) != 0) continue;
+
+        axe.marks[m->slot] = window;
+        wl_list_remove(&m->link);
+        free(m);
     }
 }
 
@@ -167,6 +244,8 @@ void restart_axe(Seat *seat, Arg *arg) {
     if(f == NULL) {
         fprintf(stderr, "restart: failed to open %s for writing, restarting without saved state\n", state_path());
     } else {
+        if(selmon != NULL) fprintf(f, "S %d\n", output_index_of(selmon));
+
         Output *output;
         wl_list_for_each(output, &axe.outputs, link) {
             fprintf(f, "O %d %u %u", output_index_of(output), output->seltag, output->tagmask);
@@ -181,9 +260,21 @@ void restart_axe(Seat *seat, Arg *arg) {
             if(window->identifier[0] == '\0') continue; // never got one yet
 
             int mon_index = output_index_of(window->mon);
-            fprintf(f, "W %s %u %d %d %d %d %d %d\n",
+            int pre_fs_mon_index = window->pre_fullscreen_mon ? output_index_of(window->pre_fullscreen_mon) : -1;
+            fprintf(f, "W %s %u %d %d %d %d %d %d %d %d %d %d\n",
                     window->identifier, window->tagmask, window->floating ? 1 : 0,
-                    window->floatx, window->floaty, window->floatw, window->floath, mon_index);
+                    window->floatx, window->floaty, window->floatw, window->floath, mon_index,
+                    window->sticky ? 1 : 0, window->fullscreen ? 1 : 0, window->floating_explicit ? 1 : 0,
+                    pre_fs_mon_index);
+        }
+
+        // Marks are identifier-keyed just like windows above - a mark on
+        // a window that never got an identifier (closed before one
+        // arrived) can't be restored, same reasoning as the `continue`
+        // above, so it's silently dropped rather than saved as garbage.
+        for(int i = 0; i < MARK_COUNT; i++) {
+            if(axe.marks[i] == NULL || axe.marks[i]->identifier[0] == '\0') continue;
+            fprintf(f, "M %d %s\n", i, axe.marks[i]->identifier);
         }
 
         fclose(f);
