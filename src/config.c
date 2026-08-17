@@ -52,8 +52,7 @@ static const ActionEntry action_table[] = {
     {"select_prev_mon",select_prev_mon, ARG_NONE},
     {"select_next_mon",select_next_mon, ARG_NONE},
     {"togglebar",togglebar, ARG_NONE},
-    {"spawn", spawn}
-    {"exit_session", exit_session, ARGNONE},
+    {"exit_session", exit_session, ARG_NONE},
     {NULL, NULL, ARG_NONE}
 };
 
